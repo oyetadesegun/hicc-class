@@ -13,8 +13,8 @@ import {
   Globe, 
   Cpu
 } from "lucide-react";
-import ImageVideoHero from "@/src/components/ImageVideoHero";
-import { Button } from "@/src/components/ui/button";
+import ImageVideoHero from "@/components/ImageVideoHero";
+import { Button } from "@/components/ui/button";
 
 const fadeIn = {
   hidden: { opacity: 0, y: 30 },

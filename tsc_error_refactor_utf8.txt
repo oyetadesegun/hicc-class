@@ -1,0 +1,2 @@
+﻿src/app/certificates/[id]/page.tsx(32,56): error TS2339: Property 'get' does not exist on type '{ list: () => Promise<Certificate[]>; }'.
+src/app/exam/[id]/page.tsx(115,45): error TS2339: Property 'create' does not exist on type '{ list: () => Promise<Certificate[]>; }'.

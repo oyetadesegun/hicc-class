@@ -236,3 +236,39 @@ export async function deleteLesson(lessonId: string) {
     where: { id: lessonId },
   });
 }
+
+export async function issueCertificate(courseId: string, userId: string) {
+  const currentUserId = await getUserId();
+  if (!currentUserId) throw new Error('Not authenticated');
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { enrolledCourses: true }
+  });
+  const course = await prisma.course.findUnique({ where: { id: courseId } });
+
+  if (!user || !course) throw new Error('User or Course not found');
+
+  // Generate a simple certificate number
+  const certificateNumber = `CERT-${courseId.slice(0, 4)}-${userId.slice(0, 4)}-${Date.now().toString().slice(-4)}`;
+
+  return prisma.certificate.create({
+    data: {
+      certificateNumber,
+      userId,
+      courseId,
+      studentName: user.name,
+      courseName: course.title,
+    },
+  });
+}
+
+export async function getCertificate(id: string) {
+  return prisma.certificate.findUnique({
+    where: { id },
+    include: {
+      course: true,
+      user: true,
+    },
+  });
+}

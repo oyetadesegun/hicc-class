@@ -1,14 +1,14 @@
 'use client';
 
-import { useAuth } from '@/src/lib/auth-context';
+import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
-import { DashboardLayout } from '@/src/components/dashboard-layout';
-import { vignan } from '@/src/lib/vignan-client';
-import { Assignment, Course } from '@/src/lib/mock-data';
-import { Card } from '@/src/components/ui/card';
-import { Button } from '@/src/components/ui/button';
-import { Textarea } from '@/src/components/ui/textarea';
+import { DashboardLayout } from '@/components/dashboard-layout';
+import { vignan } from '@/lib/vignan-client';
+import { Assignment, Course } from '@/lib/mock-data';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { Calendar, Send, FileText, CheckCircle2 } from 'lucide-react';
 
 export default function AssignmentDetailPage({

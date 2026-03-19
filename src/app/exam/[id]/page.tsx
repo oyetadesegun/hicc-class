@@ -1,15 +1,15 @@
 'use client';
 
-import { useAuth } from '@/src/lib/auth-context';
+import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
-import { DashboardLayout } from '@/src/components/dashboard-layout';
-import { vignan } from '@/src/lib/vignan-client';
-import { Course, Exam } from '@/src/lib/mock-data';
-import { Card } from '@/src/components/ui/card';
-import { Button } from '@/src/components/ui/button';
-import { RadioGroup, RadioGroupItem } from '@/src/components/ui/radio-group';
-import { Label } from '@/src/components/ui/label';
+import { DashboardLayout } from '@/components/dashboard-layout';
+import { vignan } from '@/lib/vignan-client';
+import { Course, Exam } from '@/lib/mock-data';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
 import { CheckCircle2, XCircle, Clock } from 'lucide-react';
 
 export default function ExamPage({ params: paramsPromise }: { params: Promise<{ id: string }> }) {

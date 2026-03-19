@@ -1,18 +1,18 @@
 'use client';
 
-import { useAuth } from '@/src/lib/auth-context';
+import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
-import { DashboardLayout } from '@/src/components/dashboard-layout';
-import { vignan } from '@/src/lib/vignan-client';
-import { Course } from '@/src/lib/mock-data';
-import { Card } from '@/src/components/ui/card';
-import { Button } from '@/src/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/src/components/ui/tabs';
+import { DashboardLayout } from '@/components/dashboard-layout';
+import { vignan } from '@/lib/vignan-client';
+import { Course } from '@/lib/mock-data';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Play, Clock, Users, Zap, FileText, BookOpen, CheckCircle2, QrCode, KeyRound } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/src/components/ui/dialog';
-import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/src/components/ui/input-otp';
-import { QRScanner } from '@/src/components/qr-scanner';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
+import { QRScanner } from '@/components/qr-scanner';
 import { toast } from 'sonner';
 
 export default function CourseDetailPage({ params: paramsPromise }: { params: Promise<{ id: string }> }) {

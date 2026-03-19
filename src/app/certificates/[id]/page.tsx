@@ -1,13 +1,13 @@
 'use client';
 
-import { useAuth } from '@/src/lib/auth-context';
+import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
-import { DashboardLayout } from '@/src/components/dashboard-layout';
-import { vignan } from '@/src/lib/vignan-client';
-import { Certificate } from '@/src/lib/mock-data';
-import { Card } from '@/src/components/ui/card';
-import { Button } from '@/src/components/ui/button';
+import { DashboardLayout } from '@/components/dashboard-layout';
+import { vignan } from '@/lib/vignan-client';
+import { Certificate } from '@/lib/mock-data';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Download, Share2, Award, Calendar, BookOpen } from 'lucide-react';
 
 export default function CertificateDetailPage({

@@ -1,19 +1,19 @@
 'use client';
 
-import { useAuth } from '@/src/lib/auth-context';
+import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { DashboardLayout } from '@/src/components/dashboard-layout';
-import { vignan } from '@/src/lib/vignan-client';
-import { Course } from '@/src/lib/mock-data';
-import { Card } from '@/src/components/ui/card';
-import { Button } from '@/src/components/ui/button';
+import { DashboardLayout } from '@/components/dashboard-layout';
+import { vignan } from '@/lib/vignan-client';
+import { Course } from '@/lib/mock-data';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Plus, Settings, Users, BarChart3, QrCode, Trash2, BookOpen, Clock, List, ListPlus, Video, X, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/src/components/ui/dialog';
-import { Label } from '@/src/components/ui/label';
-import { Input } from '@/src/components/ui/input';
-import { Textarea } from '@/src/components/ui/textarea';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 
 export default function AdminCoursesPage() {
   const { user, loading } = useAuth();

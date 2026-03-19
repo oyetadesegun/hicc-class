@@ -1,9 +1,9 @@
 'use client';
 
-import { useAuth } from '@/src/lib/auth-context';
+import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import { Button } from '@/src/components/ui/button';
+import { Button } from '@/components/ui/button';
 import { BookOpen, Users, Award, Zap, ArrowRight } from 'lucide-react';
 
 export default function Home() {

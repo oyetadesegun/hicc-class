@@ -113,6 +113,14 @@ export const entities = {
     list: async (): Promise<Certificate[]> => {
       const user = await authActions.me();
       return (user?.certificates as any) || [];
+    },
+    get: async (id: string): Promise<Certificate | null> => {
+      const cert = await courseActions.getCertificate(id);
+      return cert as any;
+    },
+    create: async (data: { courseId: string; userId: string }): Promise<Certificate> => {
+      const cert = await courseActions.issueCertificate(data.courseId, data.userId);
+      return cert as any;
     }
   }
 };

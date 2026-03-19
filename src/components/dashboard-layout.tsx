@@ -2,8 +2,8 @@
 
 import { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/src/lib/auth-context';
-import { Button } from '@/src/components/ui/button';
+import { useAuth } from '@/lib/auth-context';
+import { Button } from '@/components/ui/button';
 import { BookOpen, Home, FileText, Award, User, LogOut, LayoutDashboard, BarChart3, QrCode } from 'lucide-react';
 import Link from 'next/link';
 
