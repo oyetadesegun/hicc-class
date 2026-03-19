@@ -83,6 +83,9 @@ export const entities = {
     },
     createLiveSession: async (courseId: string, data: any) => {
       return await courseActions.createLiveSession(courseId, data);
+    },
+    delete: async (id: string) => {
+      return await courseActions.deleteCourse(id);
     }
   },
   Student: {

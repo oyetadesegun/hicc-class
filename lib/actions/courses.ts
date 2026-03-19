@@ -12,28 +12,57 @@ async function getUserId() {
 }
 
 export async function getCourses() {
-  return prisma.course.findMany({
+  const courses = await prisma.course.findMany({
     include: {
-      lessons: true,
+      lessons: { orderBy: { order: 'asc' } },
       liveSessions: true,
       quizzes: true,
       exams: true,
     },
   });
+
+  return courses.map(course => ({
+    ...course,
+    liveSession: course.liveSessions[0] || null,
+  }));
 }
 
 export async function getCourse(id: string) {
-  return prisma.course.findUnique({
+  const course = await prisma.course.findUnique({
     where: { id },
     include: {
-      lessons: {
-        orderBy: { order: 'asc' },
-      },
+      lessons: { orderBy: { order: 'asc' } },
       liveSessions: true,
       quizzes: true,
       exams: true,
     },
   });
+
+  if (!course) return null;
+
+  return {
+    ...course,
+    liveSession: course.liveSessions[0] || null,
+  };
+}
+
+export async function deleteCourse(id: string) {
+  const userId = await getUserId();
+  if (!userId) throw new Error('Not authenticated');
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (user?.role !== 'ADMIN') throw new Error('Unauthorized');
+
+  // Cascade delete manually since we might have many relations
+  await prisma.userCourse.deleteMany({ where: { courseId: id } });
+  await prisma.lesson.deleteMany({ where: { courseId: id } });
+  await prisma.liveSession.deleteMany({ where: { courseId: id } });
+  await prisma.quiz.deleteMany({ where: { courseId: id } });
+  await prisma.assignment.deleteMany({ where: { courseId: id } });
+  await prisma.exam.deleteMany({ where: { courseId: id } });
+  await prisma.certificate.deleteMany({ where: { courseId: id } });
+
+  return prisma.course.delete({ where: { id } });
 }
 
 export async function enrollInCourse(courseId: string) {

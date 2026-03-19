@@ -8,7 +8,7 @@ import { vignan } from '@/lib/vignan-client';
 import { Course } from '@/lib/mock-data';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, Settings, Users, BarChart3, QrCode } from 'lucide-react';
+import { Plus, Settings, Users, BarChart3, QrCode, Trash2, BookOpen, Clock } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -61,14 +61,25 @@ export default function AdminCoursesPage() {
     }
   };
 
+  const handleDeleteCourse = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this course? This action cannot be undone.')) return;
+    try {
+      await vignan.entities.Course.delete(id);
+      toast.success('Course deleted successfully');
+      fetchCourses();
+    } catch (error) {
+      toast.error('Failed to delete course');
+    }
+  };
+
   const handleInitiateAttendance = async (course: Course) => {
     if (!course.liveSession) {
       // Create a dummy live session if none exists
       try {
         await vignan.entities.Course.createLiveSession(course.id, {
-          title: 'Introduction Session',
+          title: 'Live Session - ' + course.title,
           date: new Date(),
-          duration: '30',
+          duration: course.duration,
           instructor: course.instructor,
           link: '#',
           secretCode: Math.floor(100000 + Math.random() * 900000).toString(),
@@ -220,11 +231,16 @@ export default function AdminCoursesPage() {
                     onClick={() => handleInitiateAttendance(course)}
                   >
                     <QrCode className="w-3.5 h-3.5" />
-                    Initiate Attendance
+                    Attendance
                   </Button>
-                  <Button variant="ghost" size="sm" className="gap-2">
-                    <Settings className="w-3.5 h-3.5 text-muted-foreground" />
-                    Manage
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="gap-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={() => handleDeleteCourse(course.id)}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete
                   </Button>
                 </div>
               </div>
