@@ -14,6 +14,7 @@ model User {
   phoneNumber   String?
   role          String    @default("STUDENT")
   avatar        String?
+  attendance    Json?     @default("{}")
   enrolledCourses UserCourse[]
   submissions   Submission[]
   certificates  Certificate[]

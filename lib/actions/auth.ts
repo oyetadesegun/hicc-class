@@ -82,14 +82,17 @@ export async function logout() {
   cookieStore.delete(AUTH_COOKIE);
 }
 
-export async function updateMe(updates: Partial<User>): Promise<User> {
+export async function updateMe(updates: any): Promise<User> {
   const cookieStore = await cookies();
   const userId = cookieStore.get(AUTH_COOKIE)?.value;
 
   if (!userId) throw new Error('Not authenticated');
 
+  // Filter out fields that shouldn't be updated directly or might cause Prisma errors
+  const { id, email, createdAt, updatedAt, ...validUpdates } = updates;
+
   return prisma.user.update({
     where: { id: userId },
-    data: updates,
+    data: validUpdates,
   });
 }

@@ -9,6 +9,11 @@ import { Course } from '@/lib/mock-data';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus, Settings, Users, BarChart3, QrCode, Trash2, BookOpen, Clock, List, ListPlus, Video, X, CheckCircle2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 
 export default function AdminCoursesPage() {
   const { user, loading } = useAuth();

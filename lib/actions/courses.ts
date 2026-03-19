@@ -25,6 +25,8 @@ export async function getCourses() {
   return courses.map(course => ({
     ...course,
     liveSession: course.liveSessions[0] || null,
+    quiz: course.quizzes[0] || null,
+    exam: course.exams[0] || null,
   }));
 }
 
@@ -45,6 +47,8 @@ export async function getCourse(id: string) {
   return {
     ...course,
     liveSession: course.liveSessions[0] || null,
+    quiz: course.quizzes[0] || null,
+    exam: course.exams[0] || null,
   };
 }
 
