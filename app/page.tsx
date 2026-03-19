@@ -14,12 +14,8 @@ export default function Home() {
     // No automatic redirect to dashboard
   }, [user, loading, router]);
 
-  if (loading) {
-    return null; // Still wait for loading
-  }
-
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background text-foreground">
       {/* Navigation */}
       <nav className="border-b sticky top-0 bg-background/80 backdrop-blur-sm z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
@@ -30,12 +26,20 @@ export default function Home() {
             <span className="text-2xl font-bold tracking-tight font-outfit text-secondary">HARVESTERS</span>
           </div>
           <div className="flex gap-4">
-            <Button variant="outline" onClick={() => router.push('/login')}>
-              Sign In
-            </Button>
-            <Button onClick={() => router.push('/register')}>
-              Get Started
-            </Button>
+            {!loading && user ? (
+              <Button onClick={() => router.push('/dashboard')}>
+                Go to Dashboard
+              </Button>
+            ) : (
+              <>
+                <Button variant="outline" onClick={() => router.push('/login')}>
+                  Sign In
+                </Button>
+                <Button onClick={() => router.push('/register')}>
+                  Get Started
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </nav>
@@ -52,13 +56,22 @@ export default function Home() {
               Access curated faith-based and professional courses designed to help you grow, lead, and serve effectively.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 pt-4">
-              <Button size="lg" className="h-14 px-8 text-lg" onClick={() => router.push('/register')}>
-                Start Learning
-                <ArrowRight className="ml-2 w-5 h-5" />
-              </Button>
-              <Button variant="outline" size="lg" className="h-14 px-8 text-lg" onClick={() => router.push('/login')}>
-                Member Login
-              </Button>
+              {!loading && user ? (
+                <Button size="lg" className="h-14 px-8 text-lg" onClick={() => router.push('/dashboard')}>
+                  Continue to Dashboard
+                  <ArrowRight className="ml-2 w-5 h-5" />
+                </Button>
+              ) : (
+                <>
+                  <Button size="lg" className="h-14 px-8 text-lg" onClick={() => router.push('/register')}>
+                    Start Learning
+                    <ArrowRight className="ml-2 w-5 h-5" />
+                  </Button>
+                  <Button variant="outline" size="lg" className="h-14 px-8 text-lg" onClick={() => router.push('/login')}>
+                    Member Login
+                  </Button>
+                </>
+              )}
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
