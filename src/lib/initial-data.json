@@ -1,0 +1,74 @@
+{
+  "courses": [
+    {
+      "id": "course-leadership",
+      "title": "Basic Leadership",
+      "description": "Develop essential leadership skills to lead teams effectively and inspire others.",
+      "instructor": "Dr. James Wilson",
+      "duration": "6 weeks",
+      "category": "Leadership",
+      "thumbnail": "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&q=80&w=800",
+      "level": "Beginner",
+      "price": 0,
+      "lessons": [
+        { "id": "lesson-l1", "title": "Leadership Foundations", "videoUrl": "/videos/leadership-foundations.mp4", "duration": "45 mins", "order": 1 },
+        { "id": "lesson-l2", "title": "Communication Skills", "videoUrl": "/videos/communication-skills.mp4", "duration": "50 mins", "order": 2 }
+      ],
+      "liveSessions": [
+        {
+          "id": "live-l1",
+          "title": "Leadership Workshop",
+          "date": "2026-03-25T10:00:00Z",
+          "instructor": "Dr. James Wilson",
+          "duration": "2 hours",
+          "link": "https://zoom.us/j/987654"
+        }
+      ],
+      "quizzes": [
+        {
+          "id": "quiz-l1",
+          "title": "Leadership Basics Quiz",
+          "questions": [
+            {
+              "id": "lq1",
+              "question": "What is the most important quality of a leader?",
+              "options": ["Authority", "Integrity", "Intelligence", "Wealth"],
+              "correctAnswer": 1
+            }
+          ]
+        }
+      ],
+      "exams": [
+        {
+          "id": "exam-l1",
+          "title": "Basic Leadership Certification Exam",
+          "duration": 60,
+          "questions": [
+            {
+              "id": "le1",
+              "question": "Explain the difference between management and leadership.",
+              "options": ["They are the same", "Management is about processes, leadership is about people", "Leadership is a rank", "Management is for small teams"],
+              "correctAnswer": 1
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "id": "student-1",
+      "name": "Harvester Student",
+      "email": "student@harvesters.org",
+      "password": "password123",
+      "role": "STUDENT"
+    },
+    {
+      "id": "admin-1",
+      "name": "Admin User",
+      "email": "admin@harvesters.org",
+      "password": "password123",
+      "role": "ADMIN"
+    }
+  ]
+}

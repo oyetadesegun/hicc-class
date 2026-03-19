@@ -1,0 +1,4 @@
+﻿Datasource "db": PostgreSQL database "postgres", schema "public" at "aws-1-eu-west-1.pooler.supabase.com:5432"
+
+3 migrations found in prisma/migrations
+
