@@ -11,13 +11,11 @@ export default function Home() {
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && user) {
-      router.push('/dashboard');
-    }
+    // No automatic redirect to dashboard
   }, [user, loading, router]);
 
-  if (loading || user) {
-    return null; // Wait for auth check or redirect
+  if (loading) {
+    return null; // Still wait for loading
   }
 
   return (
