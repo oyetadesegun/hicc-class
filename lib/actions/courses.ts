@@ -16,6 +16,7 @@ export async function getCourses() {
     include: {
       lessons: { orderBy: { order: 'asc' } },
       liveSessions: true,
+      assignments: true,
       quizzes: true,
       exams: true,
     },
@@ -33,6 +34,7 @@ export async function getCourse(id: string) {
     include: {
       lessons: { orderBy: { order: 'asc' } },
       liveSessions: true,
+      assignments: true,
       quizzes: true,
       exams: true,
     },
@@ -68,6 +70,20 @@ export async function deleteCourse(id: string) {
 export async function enrollInCourse(courseId: string) {
   const userId = await getUserId();
   if (!userId) throw new Error('Not authenticated');
+
+  // Check if already enrolled
+  const existingEnrollment = await prisma.userCourse.findUnique({
+    where: {
+      userId_courseId: {
+        userId,
+        courseId,
+      },
+    },
+  });
+
+  if (existingEnrollment) {
+    return existingEnrollment;
+  }
 
   return prisma.userCourse.create({
     data: {
@@ -166,5 +182,37 @@ export async function createLiveSession(courseId: string, data: {
       ...data,
       courseId,
     },
+  });
+}
+
+export async function createLesson(courseId: string, data: {
+  title: string;
+  duration: string;
+  videoUrl: string;
+  order: number;
+}) {
+  const userId = await getUserId();
+  if (!userId) throw new Error('Not authenticated');
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (user?.role !== 'ADMIN') throw new Error('Unauthorized');
+
+  return prisma.lesson.create({
+    data: {
+      ...data,
+      courseId,
+    },
+  });
+}
+
+export async function deleteLesson(lessonId: string) {
+  const userId = await getUserId();
+  if (!userId) throw new Error('Not authenticated');
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (user?.role !== 'ADMIN') throw new Error('Unauthorized');
+
+  return prisma.lesson.delete({
+    where: { id: lessonId },
   });
 }

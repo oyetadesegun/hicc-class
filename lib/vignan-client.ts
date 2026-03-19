@@ -88,6 +88,14 @@ export const entities = {
       return await courseActions.deleteCourse(id);
     }
   },
+  Lesson: {
+    create: async (courseId: string, data: any) => {
+      return await courseActions.createLesson(courseId, data);
+    },
+    delete: async (id: string) => {
+      return await courseActions.deleteLesson(id);
+    }
+  },
   Student: {
     get: async (id: string) => {
       // In this app, we mostly care about the current student

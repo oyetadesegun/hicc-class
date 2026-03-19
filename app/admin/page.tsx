@@ -8,12 +8,7 @@ import { vignan } from '@/lib/vignan-client';
 import { Course } from '@/lib/mock-data';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, Settings, Users, BarChart3, QrCode, Trash2, BookOpen, Clock } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { toast } from 'sonner';
+import { Plus, Settings, Users, BarChart3, QrCode, Trash2, BookOpen, Clock, List, ListPlus, Video, X, CheckCircle2 } from 'lucide-react';
 
 export default function AdminCoursesPage() {
   const { user, loading } = useAuth();
@@ -21,8 +16,16 @@ export default function AdminCoursesPage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isAttendanceModalOpen, setIsAttendanceModalOpen] = useState(false);
+  const [isLessonModalOpen, setIsLessonModalOpen] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [newCode, setNewCode] = useState('');
+
+  const [lessonFormData, setLessonFormData] = useState({
+    title: '',
+    duration: '',
+    videoUrl: '',
+    order: 1,
+  });
 
   const [formData, setFormData] = useState({
     title: '',
@@ -95,6 +98,54 @@ export default function AdminCoursesPage() {
     setSelectedCourse(course);
     setNewCode(Math.floor(100000 + Math.random() * 900000).toString());
     setIsAttendanceModalOpen(true);
+  };
+
+  const handleManageLessons = (course: Course) => {
+    setSelectedCourse(course);
+    setLessonFormData({
+      title: '',
+      duration: '',
+      videoUrl: '',
+      order: course.lessons.length + 1,
+    });
+    setIsLessonModalOpen(true);
+  };
+
+  const handleCreateLesson = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedCourse) return;
+    try {
+      await (vignan.entities as any).Lesson.create(selectedCourse.id, lessonFormData);
+      toast.success('Lesson added successfully!');
+      setLessonFormData({
+        title: '',
+        duration: '',
+        videoUrl: '',
+        order: selectedCourse.lessons.length + 2,
+      });
+      fetchCourses();
+      // Refresh selected course to show new lesson
+      const allCourses = await vignan.entities.Course.list();
+      const updatedCourse = allCourses.find((c: Course) => c.id === selectedCourse.id);
+      if (updatedCourse) setSelectedCourse(updatedCourse);
+    } catch (error) {
+      toast.error('Failed to add lesson');
+    }
+  };
+
+  const handleDeleteLesson = async (lessonId: string) => {
+    if (!confirm('Are you sure you want to delete this lesson?')) return;
+    try {
+      await (vignan.entities as any).Lesson.delete(lessonId);
+      toast.success('Lesson deleted');
+      fetchCourses();
+      // Refresh selected course
+      const allCourses = await vignan.entities.Course.list();
+      const updatedCourse = allCourses.find((c: Course) => c.id === selectedCourse?.id);
+      if (updatedCourse) setSelectedCourse(updatedCourse);
+    } catch (error) {
+      toast.error('Failed to delete lesson');
+    }
   };
 
   const confirmAttendanceCode = async () => {
@@ -234,13 +285,22 @@ export default function AdminCoursesPage() {
                     Attendance
                   </Button>
                   <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="gap-2"
+                    onClick={() => handleManageLessons(course)}
+                  >
+                    <ListPlus className="w-3.5 h-3.5" />
+                    Lessons
+                  </Button>
+                  <Button 
                     variant="ghost" 
                     size="sm" 
-                    className="gap-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    className="gap-2 col-span-2 text-destructive hover:text-destructive hover:bg-destructive/10"
                     onClick={() => handleDeleteCourse(course.id)}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
-                    Delete
+                    Delete Course
                   </Button>
                 </div>
               </div>
@@ -248,6 +308,7 @@ export default function AdminCoursesPage() {
           ))}
         </div>
 
+        {/* Attendance Modal */}
         <Dialog open={isAttendanceModalOpen} onOpenChange={setIsAttendanceModalOpen}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
@@ -282,9 +343,117 @@ export default function AdminCoursesPage() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Lesson Management Modal */}
+        <Dialog open={isLessonModalOpen} onOpenChange={setIsLessonModalOpen}>
+          <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col p-0 overflow-hidden">
+            <DialogHeader className="p-6 border-b">
+              <DialogTitle>Manage Lessons: {selectedCourse?.title}</DialogTitle>
+              <DialogDescription>Add new lessons or remove existing ones from this course.</DialogDescription>
+            </DialogHeader>
+            
+            <div className="flex-1 overflow-auto p-6 space-y-8">
+              {/* Existing Lessons List */}
+              <div className="space-y-4">
+                <h3 className="font-semibold flex items-center gap-2">
+                  <List className="w-4 h-4" /> 
+                  Current Lessons ({selectedCourse?.lessons.length})
+                </h3>
+                <div className="space-y-2">
+                  {selectedCourse?.lessons.length === 0 ? (
+                    <p className="text-sm text-muted-foreground italic p-4 border rounded-lg border-dashed text-center">
+                      No lessons added yet.
+                    </p>
+                  ) : (
+                    selectedCourse?.lessons.map((lesson) => (
+                      <div key={lesson.id} className="flex items-center justify-between p-3 rounded-lg border bg-muted/30 group">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
+                            {lesson.order}
+                          </div>
+                          <div>
+                            <p className="font-medium text-sm">{lesson.title}</p>
+                            <p className="text-xs text-muted-foreground">{lesson.duration} mins • {lesson.videoUrl}</p>
+                          </div>
+                        </div>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => handleDeleteLesson(lesson.id)}
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Add New Lesson Form */}
+              <div className="space-y-4 border-t pt-6">
+                <h3 className="font-semibold flex items-center gap-2">
+                  <Plus className="w-4 h-4" /> 
+                  Add New Lesson
+                </h3>
+                <form onSubmit={handleCreateLesson} className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2 col-span-2">
+                    <Label htmlFor="lesson-title">Lesson Title</Label>
+                    <Input 
+                      id="lesson-title" 
+                      value={lessonFormData.title} 
+                      onChange={(e) => setLessonFormData({...lessonFormData, title: e.target.value})}
+                      placeholder="e.g., Understanding the Covenant" 
+                      required 
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="lesson-duration">Duration (minutes)</Label>
+                    <Input 
+                      id="lesson-duration" 
+                      value={lessonFormData.duration} 
+                      onChange={(e) => setLessonFormData({...lessonFormData, duration: e.target.value})}
+                      placeholder="e.g., 15" 
+                      required 
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="lesson-order">Order Number</Label>
+                    <Input 
+                      id="lesson-order" 
+                      type="number"
+                      value={lessonFormData.order} 
+                      onChange={(e) => setLessonFormData({...lessonFormData, order: parseInt(e.target.value)})}
+                      required 
+                    />
+                  </div>
+                  <div className="grid gap-2 col-span-2">
+                    <Label htmlFor="lesson-video">Video URL / Provider ID</Label>
+                    <Input 
+                      id="lesson-video" 
+                      value={lessonFormData.videoUrl} 
+                      onChange={(e) => setLessonFormData({...lessonFormData, videoUrl: e.target.value})}
+                      placeholder="e.g., youtube_id or vimeo_id" 
+                      required 
+                    />
+                  </div>
+                  <Button type="submit" className="col-span-2 gap-2">
+                    <Plus className="w-4 h-4" />
+                    Add Lesson to Course
+                  </Button>
+                </form>
+              </div>
+            </div>
+
+            <DialogFooter className="p-6 border-t bg-muted/20">
+              <Button variant="secondary" onClick={() => setIsLessonModalOpen(false)}>
+                Finished
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );
 }
 
-import { CheckCircle2 } from 'lucide-react';
