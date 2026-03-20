@@ -27,6 +27,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
   const adminNavItems = [
     { href: '/dashboard', label: 'Dashboard', icon: Home },
     { href: '/admin', label: 'Admin', icon: LayoutDashboard },
+    { href: '/admin/attendance', label: 'Attendance Report', icon: BarChart3 },
     { href: '/courses', label: 'Courses', icon: BookOpen },
     { href: '/assignments', label: 'Assignments', icon: FileText },
     { href: '/certificates', label: 'Certificates', icon: Award },
@@ -40,14 +41,12 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
       {/* Header */}
       <header className="border-b sticky top-0 bg-background/80 backdrop-blur-sm z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-          <Link href="/dashboard" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-              <BookOpen className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <span className="text-2xl font-bold tracking-tight font-outfit text-secondary">HARVESTERS</span>
+          <Link href="/dashboard" className="flex items-center gap-3">
+            <img src="/logo/logo.png" alt="Harvesters Logo" className="h-10 w-auto" />
+            <span className="text-2xl font-bold tracking-tight font-outfit text-secondary hidden sm:block">HARVESTERS</span>
           </Link>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-muted-foreground">Welcome, {user?.name}</span>
+            <span className="text-sm text-muted-foreground hidden sm:inline-block">Welcome, {user?.name}</span>
             <Button variant="outline" size="sm" onClick={handleLogout}>
               <LogOut className="w-4 h-4 mr-2" />
               Logout
@@ -84,7 +83,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
             <Link key={item.href} href={item.href} className="flex-1">
               <div className="flex flex-col items-center gap-1 px-3 py-3 rounded-lg hover:bg-muted/50 transition-colors">
                 <item.icon className="w-5 h-5 text-primary" />
-                <span className="text-xs font-medium">{item.label}</span>
+                <span className="text-[10px] font-medium hidden sm:inline-block">{item.label}</span>
               </div>
             </Link>
           ))}

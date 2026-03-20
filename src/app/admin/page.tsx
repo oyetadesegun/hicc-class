@@ -80,29 +80,68 @@ export default function AdminCoursesPage() {
     }
   };
 
+  const [selectedLessonId, setSelectedLessonId] = useState<string>('');
+
   const handleInitiateAttendance = async (course: Course) => {
-    if (!course.liveSession) {
-      // Create a dummy live session if none exists
-      try {
-        await vignan.entities.Course.createLiveSession(course.id, {
-          title: 'Live Session - ' + course.title,
-          date: new Date(),
-          duration: course.duration,
-          instructor: course.instructor,
-          link: '#',
-          secretCode: Math.floor(100000 + Math.random() * 900000).toString(),
-        });
-        toast.success('Live session and attendance code initiated!');
-        fetchCourses();
-      } catch (error) {
-        toast.error('Failed to initiate live session');
-      }
+    setSelectedCourse(course);
+    setSelectedLessonId(''); // Reset for new selection
+    setNewCode(''); // Reset code until lesson is selected
+    setIsAttendanceModalOpen(true);
+  };
+
+  const generateAttendanceCode = async () => {
+    if (!selectedCourse || !selectedLessonId) {
+      toast.error('Please select a lesson first');
       return;
     }
+
+    const generatedCode = Math.floor(100000 + Math.random() * 900000).toString();
     
+    try {
+      await vignan.entities.Course.createLiveSession(selectedCourse.id, {
+        title: 'Live Session - ' + selectedCourse.title,
+        date: new Date(),
+        duration: selectedCourse.duration,
+        instructor: selectedCourse.instructor,
+        link: '#',
+        secretCode: generatedCode,
+        lessonId: selectedLessonId,
+      });
+      setNewCode(generatedCode);
+      toast.success('Attendance code initiated for the selected lesson!');
+      fetchCourses();
+    } catch (error) {
+      toast.error('Failed to initiate attendance');
+    }
+  };
+
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  
+  const handleEditCourse = (course: Course) => {
     setSelectedCourse(course);
-    setNewCode(Math.floor(100000 + Math.random() * 900000).toString());
-    setIsAttendanceModalOpen(true);
+    setFormData({
+      title: course.title,
+      description: course.description,
+      category: course.category,
+      instructor: course.instructor,
+      duration: course.duration,
+      level: course.level || 'Beginner',
+      thumbnail: course.thumbnail || '',
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleUpdateCourse = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedCourse) return;
+    try {
+      await vignan.entities.Course.update(selectedCourse.id, formData);
+      toast.success('Course updated successfully!');
+      setIsEditModalOpen(false);
+      fetchCourses();
+    } catch (error) {
+      toast.error('Failed to update course');
+    }
   };
 
   const handleManageLessons = (course: Course) => {
@@ -131,7 +170,7 @@ export default function AdminCoursesPage() {
       fetchCourses();
       // Refresh selected course to show new lesson
       const allCourses = await vignan.entities.Course.list();
-      const updatedCourse = allCourses.find((c: Course) => c.id === selectedCourse.id);
+      const updatedCourse = allCourses.find((c: Course) => c.id === (selectedCourse?.id as string));
       if (updatedCourse) setSelectedCourse(updatedCourse);
     } catch (error) {
       toast.error('Failed to add lesson');
@@ -150,23 +189,6 @@ export default function AdminCoursesPage() {
       if (updatedCourse) setSelectedCourse(updatedCourse);
     } catch (error) {
       toast.error('Failed to delete lesson');
-    }
-  };
-
-  const confirmAttendanceCode = async () => {
-    if (selectedCourse?.liveSession) {
-      try {
-        await vignan.entities.Course.updateLiveSessionCode(
-          selectedCourse.id,
-          selectedCourse.liveSession.id,
-          newCode
-        );
-        toast.success(`Attendance code for ${selectedCourse.title} updated: ${newCode}`);
-        setIsAttendanceModalOpen(false);
-        fetchCourses();
-      } catch (error) {
-        toast.error('Failed to update attendance code');
-      }
     }
   };
 
@@ -284,10 +306,10 @@ export default function AdminCoursesPage() {
                     variant="outline" 
                     size="sm" 
                     className="gap-2"
-                    onClick={() => handleInitiateAttendance(course)}
+                    onClick={() => handleEditCourse(course)}
                   >
-                    <QrCode className="w-3.5 h-3.5" />
-                    Attendance
+                    <Settings className="w-3.5 h-3.5" />
+                    Edit
                   </Button>
                   <Button 
                     variant="outline" 
@@ -297,6 +319,15 @@ export default function AdminCoursesPage() {
                   >
                     <ListPlus className="w-3.5 h-3.5" />
                     Lessons
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="gap-2 col-span-2"
+                    onClick={() => handleInitiateAttendance(course)}
+                  >
+                    <QrCode className="w-3.5 h-3.5" />
+                    Attendance
                   </Button>
                   <Button 
                     variant="ghost" 
@@ -313,6 +344,65 @@ export default function AdminCoursesPage() {
           ))}
         </div>
 
+        {/* Edit Course Modal */}
+        <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+          <DialogContent className="sm:max-w-[525px]">
+            <DialogHeader>
+              <DialogTitle>Edit Course: {selectedCourse?.title}</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleUpdateCourse} className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-title">Course Title</Label>
+                <Input 
+                  id="edit-title" 
+                  value={formData.title} 
+                  onChange={(e) => setFormData({...formData, title: e.target.value})}
+                  required 
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-category">Category</Label>
+                <Input 
+                  id="edit-category" 
+                  value={formData.category} 
+                  onChange={(e) => setFormData({...formData, category: e.target.value})}
+                  required 
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-instructor">Instructor</Label>
+                  <Input 
+                    id="edit-instructor" 
+                    value={formData.instructor} 
+                    onChange={(e) => setFormData({...formData, instructor: e.target.value})}
+                    required 
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-duration">Duration</Label>
+                  <Input 
+                    id="edit-duration" 
+                    value={formData.duration} 
+                    onChange={(e) => setFormData({...formData, duration: e.target.value})}
+                    required 
+                  />
+                </div>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-description">Description</Label>
+                <Textarea 
+                  id="edit-description" 
+                  value={formData.description} 
+                  onChange={(e) => setFormData({...formData, description: e.target.value})}
+                  required 
+                />
+              </div>
+              <Button type="submit" className="w-full">Update Course</Button>
+            </form>
+          </DialogContent>
+        </Dialog>
+
         {/* Attendance Modal */}
         <Dialog open={isAttendanceModalOpen} onOpenChange={setIsAttendanceModalOpen}>
           <DialogContent className="sm:max-w-md">
@@ -320,29 +410,57 @@ export default function AdminCoursesPage() {
               <DialogTitle>Initiate Attendance</DialogTitle>
             </DialogHeader>
             <div className="flex flex-col items-center justify-center p-6 space-y-6 text-center">
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground">
-                  Generate a new attendance code for the current live session of:
-                </p>
-                <p className="font-bold text-lg">{selectedCourse?.title}</p>
-              </div>
-              
-              <div className="flex flex-col items-center gap-4 w-full">
-                <div className="text-5xl font-mono font-black tracking-widest text-primary p-6 bg-primary/5 rounded-2xl border-2 border-primary/20 w-full animate-pulse">
-                  {newCode}
+              <div className="space-y-4 w-full">
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">
+                    Select the lesson to initiate attendance for:
+                  </p>
+                  <p className="font-bold text-lg">{selectedCourse?.title}</p>
                 </div>
-                <p className="text-xs text-muted-foreground max-w-xs italic">
-                  Show this code to your students. They can enter it manually or scan a QR code generated from it.
-                </p>
+
+                <div className="grid gap-2 text-left">
+                  <Label htmlFor="lesson-select">Lesson</Label>
+                  <select 
+                    id="lesson-select"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    value={selectedLessonId}
+                    onChange={(e) => setSelectedLessonId(e.target.value)}
+                  >
+                    <option value="">Select a lesson...</option>
+                    {selectedCourse?.lessons.map((lesson) => (
+                      <option key={lesson.id} value={lesson.id}>
+                        Lesson {lesson.order}: {lesson.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {!newCode ? (
+                  <Button 
+                    className="w-full h-12 text-lg font-bold" 
+                    onClick={generateAttendanceCode}
+                    disabled={!selectedLessonId}
+                  >
+                    Generate Attendance Code
+                  </Button>
+                ) : (
+                  <div className="flex flex-col items-center gap-4 w-full animate-in fade-in zoom-in duration-300">
+                    <div className="text-5xl font-mono font-black tracking-widest text-primary p-6 bg-primary/5 rounded-2xl border-2 border-primary/20 w-full animate-pulse">
+                      {newCode}
+                    </div>
+                    <p className="text-xs text-muted-foreground max-w-xs italic">
+                      Show this code to your students. They can enter it manually in their course dashboard.
+                    </p>
+                    <Button variant="outline" className="w-full" onClick={() => setNewCode('')}>
+                      Generate New Code
+                    </Button>
+                  </div>
+                )}
               </div>
 
-              <div className="flex gap-3 w-full pt-4">
-                <Button variant="outline" className="flex-1" onClick={() => setIsAttendanceModalOpen(false)}>
-                  Cancel
-                </Button>
-                <Button className="flex-1 gap-2" onClick={confirmAttendanceCode}>
-                  <CheckCircle2 className="w-4 h-4" />
-                  Apply & Share
+              <div className="flex gap-3 w-full pt-4 border-t">
+                <Button variant="ghost" className="flex-1" onClick={() => setIsAttendanceModalOpen(false)}>
+                  Close
                 </Button>
               </div>
             </div>

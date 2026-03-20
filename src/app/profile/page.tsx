@@ -15,7 +15,11 @@ import {
   Award,
   BookOpen,
   TrendingUp,
+  Shield,
 } from 'lucide-react';
+import { toast } from 'sonner';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 export default function ProfilePage() {
   const { user, loading } = useAuth();
@@ -84,17 +88,17 @@ export default function ProfilePage() {
       <div className="space-y-8 pb-16 md:pb-0 max-w-4xl">
         {/* Profile Header */}
         <Card className="p-8 space-y-6">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="w-20 h-20 rounded-full bg-linear-to-br from-primary to-accent flex items-center justify-center text-white">
-                <User className="w-10 h-10" />
+          <div className="flex flex-col sm:flex-row items-center sm:items-start justify-between gap-6 text-center sm:text-left">
+            <div className="flex flex-col sm:flex-row items-center gap-6">
+              <div className="w-24 h-24 rounded-full bg-linear-to-br from-primary to-accent flex items-center justify-center text-white shrink-0 shadow-lg">
+                <User className="w-12 h-12" />
               </div>
-              <div>
-                <h1 className="text-3xl font-bold">{user.name}</h1>
-                <p className="text-muted-foreground">Student Profile</p>
+              <div className="space-y-1">
+                <h1 className="text-3xl md:text-4xl font-bold font-outfit">{user.name}</h1>
+                <p className="text-muted-foreground font-medium text-lg italic">Student Profile</p>
               </div>
             </div>
-            <Button variant="outline" onClick={() => router.back()}>
+            <Button variant="outline" onClick={() => router.back()} className="rounded-full px-6">
               Back
             </Button>
           </div>
@@ -120,7 +124,7 @@ export default function ProfilePage() {
         </Card>
 
         {/* Statistics */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 font-outfit">
           <Card className="p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-medium text-muted-foreground">
@@ -170,25 +174,26 @@ export default function ProfilePage() {
               {enrolledCourses.map((course) => (
                 <div
                   key={course.id}
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                  className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-6 border rounded-xl hover:bg-muted/50 transition-all hover:border-primary/30 group"
                 >
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold">{course.title}</h3>
-                    <p className="text-sm text-muted-foreground">
+                  <div className="flex-1 min-w-0 mb-4 sm:mb-0">
+                    <h3 className="font-bold text-lg group-hover:text-primary transition-colors">{course.title}</h3>
+                    <p className="text-sm text-muted-foreground italic">
                       Instructor: {course.instructor}
                     </p>
                   </div>
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center justify-between sm:justify-end gap-6 w-full sm:w-auto pt-4 sm:pt-0 border-t sm:border-0 border-border">
                     <div className="text-right">
-                      <p className="font-medium">
+                      <p className="font-bold text-lg text-primary">
                         {user.attendance[course.id]}%
                       </p>
-                      <p className="text-xs text-muted-foreground">Progress</p>
+                      <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Progress</p>
                     </div>
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => router.push(`/courses/${course.id}`)}
+                      className="rounded-full px-5 h-9"
                     >
                       View
                     </Button>
@@ -228,6 +233,48 @@ export default function ProfilePage() {
             </div>
           </Card>
         )}
+
+        {/* Security / Change Password */}
+        <Card className="p-8 space-y-6">
+          <div className="flex items-center gap-2">
+            <Shield className="w-6 h-6 text-primary" />
+            <h2 className="text-2xl font-bold">Security</h2>
+          </div>
+          <p className="text-muted-foreground">
+            Update your password to keep your account secure.
+          </p>
+          
+          <form 
+            onSubmit={async (e) => {
+              e.preventDefault();
+              const formData = new FormData(e.currentTarget);
+              const password = formData.get('password') as string;
+              const confirmPassword = formData.get('confirmPassword') as string;
+              
+              if (password !== confirmPassword) {
+                return toast.error("Passwords do not match");
+              }
+              
+              if (password.length < 6) {
+                return toast.error("Password must be at least 6 characters");
+              }
+              
+              await vignan.auth.updatePassword(password);
+              e.currentTarget.reset();
+            }}
+            className="space-y-4 max-w-sm"
+          >
+            <div className="space-y-2">
+              <Label htmlFor="password">New Password</Label>
+              <Input id="password" name="password" type="password" required />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirm New Password</Label>
+              <Input id="confirmPassword" name="confirmPassword" type="password" required />
+            </div>
+            <Button type="submit">Update Password</Button>
+          </form>
+        </Card>
       </div>
     </DashboardLayout>
   );

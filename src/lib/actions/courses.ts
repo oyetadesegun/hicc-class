@@ -169,11 +169,12 @@ export async function updateLiveSessionCode(courseId: string, sessionId: string,
 export async function createLiveSession(courseId: string, data: {
   title: string;
   description?: string;
-  date: Date;
+  date: string | Date;
   duration: string;
   instructor: string;
   link: string;
   secretCode?: string;
+  lessonId?: string;
 }) {
   const userId = await getUserId();
   if (!userId) throw new Error('Not authenticated');
@@ -181,11 +182,90 @@ export async function createLiveSession(courseId: string, data: {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (user?.role !== 'ADMIN') throw new Error('Unauthorized');
 
-  return prisma.liveSession.create({
+  console.log('Creating live session for course:', courseId);
+  console.log('Session data:', data);
+
+  try {
+    return await prisma.liveSession.create({
+      data: {
+        title: data.title,
+        description: data.description,
+        date: new Date(data.date),
+        duration: data.duration,
+        instructor: data.instructor,
+        link: data.link,
+        secretCode: data.secretCode,
+        lessonId: data.lessonId || null,
+        courseId,
+      },
+    });
+  } catch (error) {
+    console.error('Prisma Create LiveSession Error:', error);
+    throw error;
+  }
+}
+
+export async function submitAttendanceCode(code: string) {
+  const userId = await getUserId();
+  if (!userId) throw new Error('Not authenticated');
+
+  // Find the live session with this code
+  const session = await prisma.liveSession.findFirst({
+    where: { secretCode: code },
+    include: { course: true, lesson: true }
+  });
+
+  if (!session) throw new Error('Invalid attendance code');
+  if (!session.lessonId) throw new Error('This session is not linked to a lesson');
+
+  // Check if student is enrolled
+  const enrollment = await prisma.userCourse.findUnique({
+    where: { userId_courseId: { userId, courseId: session.courseId } }
+  });
+
+  if (!enrollment) throw new Error('You are not enrolled in this course');
+
+  // DEDUPLICATION: Check if already attended this specific lesson
+  const existingRecord = await prisma.attendanceRecord.findUnique({
+    where: { userId_lessonId: { userId, lessonId: session.lessonId } }
+  });
+
+  if (existingRecord) {
+    throw new Error('ALREADY_ATTENDED'); // Special error code for the frontend
+  }
+
+  // Record attendance
+  const record = await prisma.attendanceRecord.create({
     data: {
-      ...data,
-      courseId,
+      userId,
+      lessonId: session.lessonId,
+      courseId: session.courseId,
+    }
+  });
+
+  // Also update progress or attendedLive flag if needed
+  await prisma.userCourse.update({
+    where: { userId_courseId: { userId, courseId: session.courseId } },
+    data: { attendedLive: true }
+  });
+
+  return record;
+}
+
+export async function getAttendanceRecords() {
+  const userId = await getUserId();
+  if (!userId) throw new Error('Not authenticated');
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (user?.role !== 'ADMIN') throw new Error('Unauthorized');
+
+  return prisma.attendanceRecord.findMany({
+    include: {
+      user: { select: { name: true, email: true } },
+      lesson: { select: { title: true } },
+      course: { select: { title: true } },
     },
+    orderBy: { attendedAt: 'desc' }
   });
 }
 

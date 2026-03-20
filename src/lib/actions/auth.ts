@@ -8,9 +8,18 @@ import { toast } from 'sonner';
 
 const AUTH_COOKIE = 'auth_session';
 
+async function getUserId() {
+  const cookieStore = await cookies();
+  return cookieStore.get(AUTH_COOKIE)?.value;
+}
+
 export async function login(email: string, password: string): Promise<User | null> {
   const user = await prisma.user.findUnique({
     where: { email },
+    include: {
+      enrolledCourses: true,
+      certificates: true,
+    },
   });
 
   if (user && user.password === password) { // In production, use bcrypt!
@@ -83,8 +92,7 @@ export async function logout() {
 }
 
 export async function updateMe(updates: any): Promise<User> {
-  const cookieStore = await cookies();
-  const userId = cookieStore.get(AUTH_COOKIE)?.value;
+  const userId = await getUserId();
 
   if (!userId) throw new Error('Not authenticated');
 
@@ -94,5 +102,15 @@ export async function updateMe(updates: any): Promise<User> {
   return prisma.user.update({
     where: { id: userId },
     data: validUpdates,
+  });
+}
+
+export async function updatePassword(password: string) {
+  const userId = await getUserId();
+  if (!userId) throw new Error('Not authenticated');
+
+  return prisma.user.update({
+    where: { id: userId },
+    data: { password },
   });
 }

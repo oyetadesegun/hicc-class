@@ -75,18 +75,26 @@ export default function CourseDetailPage({ params: paramsPromise }: { params: Pr
     }
   };
 
-  const handleLiveAttendance = (code: string) => {
-    if (course?.liveSession && code === course.liveSession.secretCode) {
+  const handleLiveAttendance = async (code: string) => {
+    try {
+      await vignan.entities.Course.submitAttendance(code);
       setAttendedLive(true);
       if (user) {
         const liveKey = `edu_live_attended_${user.id}_${params.id}`;
         localStorage.setItem(liveKey, 'true');
-        updateAttendance(watchedLessons, true);
+        // updateAttendance(watchedLessons, true); // This will be handled by the backend soon
         setIsModalOpen(false);
+        setOtpValue('');
         toast.success('Attendance marked successfully!');
       }
-    } else {
-      toast.error('Invalid attendance code. Please try again.');
+    } catch (error: any) {
+      if (error.message === 'ALREADY_ATTENDED') {
+        toast.info('You have already taken attendance for this lesson.');
+        setIsModalOpen(false);
+        setOtpValue('');
+      } else {
+        toast.error(error.message || 'Invalid attendance code. Please try again.');
+      }
     }
   };
 
@@ -117,7 +125,7 @@ export default function CourseDetailPage({ params: paramsPromise }: { params: Pr
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-screen">
-          <p className="text-muted-foreground">Course not found</p>
+          <p className="text-muted-foreground">Course Loading...</p>
         </div>
       </DashboardLayout>
     );

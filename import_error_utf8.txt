@@ -1,0 +1,114 @@
+﻿node.exe : npm warn 
+Unknown project 
+config 
+"shamefully-hoist". 
+This will stop 
+working in the next 
+major version of npm.
+At line:1 char:1
++ & "C:\Program Files\
+nodejs/node.exe" 
+"C:\Program 
+Files\nodejs/node_mo 
+...
++ ~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
+~~~~~
+    + CategoryInfo    
+          : NotSpeci  
+  fied: (npm warn U   
+ nknow...version o    
+f npm.:String) []    
+, RemoteException
+    + FullyQualifiedE 
+   rrorId : NativeCo  
+  mmandError
+ 
+npm warn Unknown 
+project config 
+"node-linker". This 
+will stop working in 
+the next major 
+version of npm.
+C:\Users\HomePC\coding
+\learning\node_modules
+\@prisma\client\src\ru
+ntime\getPrismaClient.
+ts:259
+        throw new Pris
+maClientInitialization
+Error(
+              ^
+
+PrismaClientInitializa
+tionError: 
+`PrismaClient` needs 
+to be constructed 
+with a non-empty, 
+valid 
+`PrismaClientOptions`:
+
+```
+new PrismaClient({
+  ...
+})
+```
+
+or
+
+```
+constructor() {
+  super({ ... });
+}
+```
+          
+    at new t (C:\Users
+\HomePC\coding\learnin
+g\node_modules\@prisma
+\client\src\runtime\ge
+tPrismaClient.ts:259:1
+5)
+    at <anonymous> (C:
+\Users\HomePC\coding\l
+earning\scripts\import
+-students.ts:5:16)
+    at 
+Object.<anonymous> (C:
+\Users\HomePC\coding\l
+earning\scripts\import
+-students.ts:80:4)
+    at 
+Module._compile (node:
+internal/modules/cjs/l
+oader:1761:14)
+    at 
+Object.transformer (C:
+\Users\HomePC\coding\l
+earning\node_modules\t
+sx\dist\register-D46fv
+sV_.cjs:3:1104)
+    at Module.load (no
+de:internal/modules/cj
+s/loader:1481:32)
+    at Module._load (n
+ode:internal/modules/c
+js/loader:1300:12)
+    at TracingChannel.
+traceSync (node:diagno
+stics_channel:328:14)
+    at wrapModuleLoad 
+(node:internal/modules
+/cjs/loader:245:24)
+    at loadCJSModuleWi
+thModuleLoad (node:int
+ernal/modules/esm/tran
+slators:336:3) {
+  clientVersion: 
+'7.2.0',
+  errorCode: 
+undefined,
+  retryable: undefined
+}
+
+Node.js v24.11.1

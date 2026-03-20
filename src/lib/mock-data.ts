@@ -18,6 +18,8 @@ export interface Course {
   instructor: string;
   duration: string;
   category: string;
+  thumbnail?: string;
+  level?: string;
   lessons: Lesson[];
   liveSession?: LiveSession;
   assignments: Assignment[];
@@ -128,6 +130,8 @@ export const mockCourses: Course[] = [
     instructor: 'Sarah Johnson',
     duration: '8 weeks',
     category: 'Web Development',
+    thumbnail: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&q=80&w=800',
+    level: 'Beginner',
     lessons: [
       { id: 'lesson-1', title: 'HTML Basics', videoUrl: '/videos/html-basics.mp4', duration: 45, order: 1 },
       { id: 'lesson-2', title: 'CSS Styling', videoUrl: '/videos/css-styling.mp4', duration: 60, order: 2 },
@@ -235,6 +239,8 @@ export const mockCourses: Course[] = [
     instructor: 'Michael Chen',
     duration: '10 weeks',
     category: 'Web Development',
+    thumbnail: 'https://images.unsplash.com/photo-1633356122544-f134324a6cee?auto=format&fit=crop&q=80&w=800',
+    level: 'Intermediate',
     lessons: [
       { id: 'lesson-4', title: 'React Components', videoUrl: '/videos/react-components.mp4', duration: 60, order: 1 },
       { id: 'lesson-5', title: 'Hooks and State', videoUrl: '/videos/hooks-state.mp4', duration: 75, order: 2 },
@@ -342,6 +348,8 @@ export const mockCourses: Course[] = [
     instructor: 'Emma Williams',
     duration: '6 weeks',
     category: 'Marketing',
+    thumbnail: 'https://images.unsplash.com/photo-1533750349088-cd871a92f312?auto=format&fit=crop&q=80&w=800',
+    level: 'Beginner',
     lessons: [
       { id: 'lesson-7', title: 'Digital Marketing Basics', videoUrl: '/videos/marketing-basics.mp4', duration: 50, order: 1 },
       { id: 'lesson-8', title: 'SEO Strategies', videoUrl: '/videos/seo-strategies.mp4', duration: 65, order: 2 },

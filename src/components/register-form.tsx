@@ -48,8 +48,11 @@ export function RegisterForm() {
   return (
     <Card className="w-full max-w-md mx-auto p-8">
       <div className="space-y-6">
-          <div className="flex flex-col space-y-2 text-center">
-            <h1 className="text-2xl font-semibold tracking-tight">
+          <div className="flex flex-col space-y-4 text-center">
+            <div className="flex justify-center">
+              <img src="/logo/logo.png" alt="Harvesters Logo" className="h-16 w-auto" />
+            </div>
+            <h1 className="text-2xl font-semibold tracking-tight font-outfit">
               Create an account
             </h1>
             <p className="text-sm text-muted-foreground">

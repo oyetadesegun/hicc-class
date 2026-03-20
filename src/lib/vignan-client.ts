@@ -13,15 +13,15 @@ const adaptUserToStudent = (user: any): Student | null => {
     name: user.name,
     email: user.email,
     password: user.password,
-    enrolledCourses: user.enrolledCourses?.map((ec: any) => ec.courseId) || [],
+    enrolledCourses: user.enrolledCourses?.map((ec: any) => ec.courseId || ec.id) || [],
     certificates: user.certificates?.map((c: any) => c.id) || [],
     attendance: user.enrolledCourses?.reduce((acc: any, ec: any) => {
-      acc[ec.courseId] = ec.progress;
+      acc[ec.courseId || ec.id] = ec.progress ?? 0;
       return acc;
     }, {}) || {},
     role: user.role,
     phoneNumber: user.phoneNumber,
-    createdAt: user.createdAt.toISOString().split('T')[0],
+    createdAt: user.createdAt instanceof Date ? user.createdAt.toISOString().split('T')[0] : String(user.createdAt),
   };
 };
 
@@ -49,6 +49,17 @@ const auth = {
   updateMe: async (updates: Partial<Student>): Promise<Student> => {
     const user = await authActions.updateMe(updates as any);
     return adaptUserToStudent(user)!;
+  },
+  updatePassword: async (password: string): Promise<boolean> => {
+    try {
+      await authActions.updatePassword(password);
+      toast.success("Password updated successfully");
+      return true;
+    } catch (error) {
+      console.error('Update password error:', error);
+      toast.error("Failed to update password");
+      return false;
+    }
   }
 };
 
@@ -57,6 +68,14 @@ export const entities = {
     list: async (): Promise<Course[]> => {
       const courses = await courseActions.getCourses();
       return courses as any;
+    },
+    enrolled: async (): Promise<Course[]> => {
+      const enrollments = await courseActions.getStudentEnrollments();
+      return enrollments.map((e: any) => ({
+        ...e.course,
+        progress: e.progress,
+        attendedLive: e.attendedLive
+      })) as any;
     },
     get: async (id: string): Promise<Course | null> => {
       const course = await courseActions.getCourse(id);
@@ -85,12 +104,16 @@ export const entities = {
       return await courseActions.createLiveSession(courseId, data);
     },
     update: async (id: string, data: any) => {
-      // For now, this is a placeholder as courseActions might not have a generic update
-      // But we can add it to courses.ts if needed, or use existing actions
       return await courseActions.updateCourse(id, data);
     },
     delete: async (id: string) => {
       return await courseActions.deleteCourse(id);
+    },
+    submitAttendance: async (code: string) => {
+      return await courseActions.submitAttendanceCode(code);
+    },
+    getAttendanceReports: async () => {
+      return await courseActions.getAttendanceRecords();
     }
   },
   Lesson: {

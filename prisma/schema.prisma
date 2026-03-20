@@ -20,6 +20,7 @@ model User {
   certificates  Certificate[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  attendanceRecords AttendanceRecord[]
 }
 
 model Course {
@@ -39,6 +40,7 @@ model Course {
   exams       Exam[]
   enrolledUsers UserCourse[]
   certificates Certificate[]
+  attendanceRecords AttendanceRecord[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
@@ -64,6 +66,8 @@ model Lesson {
   order     Int
   courseId  String
   course    Course   @relation(fields: [courseId], references: [id])
+  liveSessions LiveSession[]
+  attendanceRecords AttendanceRecord[]
 }
 
 model LiveSession {
@@ -77,6 +81,8 @@ model LiveSession {
   secretCode String?
   courseId  String
   course    Course   @relation(fields: [courseId], references: [id])
+  lessonId  String?
+  lesson    Lesson?  @relation(fields: [lessonId], references: [id])
 }
 
 model Quiz {
@@ -142,4 +148,17 @@ model Certificate {
   // Denormalized for easy display
   studentName      String
   courseName       String
+}
+
+model AttendanceRecord {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  lessonId   String
+  lesson     Lesson   @relation(fields: [lessonId], references: [id])
+  courseId   String
+  course     Course   @relation(fields: [courseId], references: [id])
+  attendedAt DateTime @default(now())
+
+  @@unique([userId, lessonId])
 }

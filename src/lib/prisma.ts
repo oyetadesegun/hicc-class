@@ -5,7 +5,10 @@ import { Pool } from 'pg'
 const prismaClientSingleton = () => {
   const pool = new Pool({ 
     connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false }
+    ssl: { rejectUnauthorized: false },
+    max: 10, // Limit the number of concurrent connections
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 2000,
   })
   const adapter = new PrismaPg(pool)
   const client = new PrismaClient({ adapter })
@@ -17,7 +20,13 @@ const prismaClientSingleton = () => {
         const courseCount = await client.course.count()
         if (courseCount === 0) {
           console.log('PRISMA: Auto-seeding initial data...')
-          const data = require('./initial-data.json')
+          let data;
+          try {
+            data = require('./initial-data.json')
+          } catch (e) {
+            console.log('PRISMA: initial-data.json not found, skipping seeding')
+            return;
+          }
           
           // Seed Users
           for (const user of data.users) {

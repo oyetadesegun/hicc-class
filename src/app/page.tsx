@@ -4,7 +4,14 @@ import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { BookOpen, Users, Award, Zap, ArrowRight } from 'lucide-react';
+import { BookOpen, Users, Award, Zap, ArrowRight, Menu } from 'lucide-react';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 
 export default function Home() {
   const { user, loading } = useAuth();
@@ -19,13 +26,11 @@ export default function Home() {
       {/* Navigation */}
       <nav className="border-b sticky top-0 bg-background/80 backdrop-blur-sm z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-              <BookOpen className="w-5 h-5 text-primary-foreground" />
-            </div>
+          <div className="flex items-center gap-3">
+            <img src="/logo/logo.png" alt="Harvesters Logo" className="h-10 w-auto" />
             <span className="text-2xl font-bold tracking-tight font-outfit text-secondary">HARVESTERS</span>
           </div>
-          <div className="flex gap-4">
+          <div className="hidden md:flex gap-4">
             {!loading && user ? (
               <Button onClick={() => router.push('/dashboard')}>
                 Go to Dashboard
@@ -41,6 +46,37 @@ export default function Home() {
               </>
             )}
           </div>
+
+          <div className="md:hidden">
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <Menu className="w-6 h-6" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right">
+                <SheetHeader>
+                  <SheetTitle>Menu</SheetTitle>
+                </SheetHeader>
+                <div className="flex flex-col gap-4 mt-8">
+                  {!loading && user ? (
+                    <Button onClick={() => router.push('/dashboard')} className="w-full">
+                      Go to Dashboard
+                    </Button>
+                  ) : (
+                    <>
+                      <Button variant="outline" onClick={() => router.push('/login')} className="w-full text-lg h-12">
+                        Sign In
+                      </Button>
+                      <Button onClick={() => router.push('/register')} className="w-full text-lg h-12">
+                        Get Started
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </SheetContent>
+            </Sheet>
+          </div>
         </div>
       </nav>
 
@@ -48,9 +84,9 @@ export default function Home() {
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           <div className="space-y-6">
-            <h1 className="text-5xl md:text-6xl font-bold leading-tight text-balance font-outfit">
+            <h1 className="text-4xl md:text-6xl font-bold leading-tight text-balance font-outfit">
               Empowering Your 
-              <span className="text-primary"> Learning Journey</span>
+              <span className="text-primary italic"> Learning Journey</span>
             </h1>
             <p className="text-xl text-muted-foreground leading-relaxed">
               Access curated faith-based and professional courses designed to help you grow, lead, and serve effectively.
@@ -74,7 +110,7 @@ export default function Home() {
               )}
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="bg-linear-to-br from-primary/20 to-primary/5 p-8 rounded-2xl space-y-4 border border-primary/10">
               <BookOpen className="w-12 h-12 text-primary" />
               <h3 className="font-bold text-xl font-outfit">Curated Content</h3>
@@ -109,7 +145,7 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
             {[
               {
                 title: 'Video Learning',
@@ -172,10 +208,8 @@ export default function Home() {
       <footer className="bg-background py-12 border-t mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 bg-primary rounded flex items-center justify-center">
-                <BookOpen className="w-4 h-4 text-primary-foreground" />
-              </div>
+            <div className="flex items-center gap-3">
+              <img src="/logo/logo.png" alt="Harvesters Logo" className="h-8 w-auto" />
               <span className="font-bold text-xl font-outfit text-secondary">HARVESTERS</span>
             </div>
             <p className="text-sm text-muted-foreground">

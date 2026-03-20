@@ -11,8 +11,8 @@
       "level": "Beginner",
       "price": 0,
       "lessons": [
-        { "id": "lesson-l1", "title": "Leadership Foundations", "videoUrl": "/videos/leadership-foundations.mp4", "duration": "45 mins", "order": 1 },
-        { "id": "lesson-l2", "title": "Communication Skills", "videoUrl": "/videos/communication-skills.mp4", "duration": "50 mins", "order": 2 }
+        { "id": "lesson-l1", "title": "Leadership Foundations", "videoUrl": "/videos/leadership-day1.mp4", "duration": "45 mins", "order": 1 },
+        { "id": "lesson-l2", "title": "Communication Skills", "videoUrl": "/videos/leadership-day2.mp4", "duration": "50 mins", "order": 2 }
       ],
       "liveSessions": [
         {
@@ -69,6 +69,13 @@
       "email": "admin@harvesters.org",
       "password": "password123",
       "role": "ADMIN"
+    },
+    {
+      "id": "john-well",
+      "name": "John Well",
+      "email": "johnwellacademy@gmail.com",
+      "password": "1t1sW***ll",
+      "role": "STUDENT"
     }
   ]
 }
