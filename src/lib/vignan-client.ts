@@ -114,14 +114,34 @@ export const entities = {
     },
     getAttendanceReports: async () => {
       return await courseActions.getAttendanceRecords();
+    },
+    getEnrolledUsers: async (courseId: string) => {
+      return await courseActions.getEnrolledUsers(courseId);
+    },
+    toggleAttendance: async (courseId: string, lessonId: string, userId: string, isPresent: boolean) => {
+      return await courseActions.toggleAttendance(courseId, lessonId, userId, isPresent);
+    },
+    bulkToggleAttendance: async (courseId: string, lessonId: string, userIds: string[], isPresent: boolean) => {
+      return await courseActions.bulkToggleAttendance(courseId, lessonId, userIds, isPresent);
     }
   },
   Lesson: {
     create: async (courseId: string, data: any) => {
       return await courseActions.createLesson(courseId, data);
     },
+    update: async (id: string, data: any) => {
+      return await courseActions.updateLesson(id, data);
+    },
     delete: async (id: string) => {
       return await courseActions.deleteLesson(id);
+    }
+  },
+  Assignment: {
+    create: async (courseId: string, data: any) => {
+      return await courseActions.createAssignment(courseId, data);
+    },
+    delete: async (id: string) => {
+      return await courseActions.deleteAssignment(id);
     }
   },
   Student: {

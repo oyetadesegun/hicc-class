@@ -4,6 +4,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { DashboardLayout } from '@/components/dashboard-layout';
+import { LoadingScreen } from '@/components/loading-screen';
 import { vignan } from '@/lib/vignan-client';
 import { Course } from '@/lib/mock-data';
 import { Card } from '@/components/ui/card';
@@ -44,9 +45,7 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <DashboardLayout>
-        <div className="flex items-center justify-center h-screen">
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
+        <LoadingScreen />
       </DashboardLayout>
     );
   }

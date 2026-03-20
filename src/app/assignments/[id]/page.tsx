@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Calendar, Send, FileText, CheckCircle2 } from 'lucide-react';
+import { FileViewer } from '@/components/file-viewer';
 
 export default function AssignmentDetailPage({
   params: paramsPromise,
@@ -151,6 +152,16 @@ export default function AssignmentDetailPage({
           <p className="text-muted-foreground whitespace-pre-wrap">
             {assignment.description}
           </p>
+          {assignment.attachmentUrl && (
+            <div className="pt-4 border-t">
+              <p className="text-sm font-semibold mb-2">Assignment Attachment:</p>
+              <FileViewer 
+                url={assignment.attachmentUrl} 
+                type={assignment.attachmentType || undefined} 
+                title={`${assignment.title} Attachment`}
+              />
+            </div>
+          )}
         </Card>
 
         {/* Submission Form */}

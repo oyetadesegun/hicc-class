@@ -4,6 +4,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
 import { DashboardLayout } from '@/components/dashboard-layout';
+import { LoadingScreen } from '@/components/loading-screen';
 import { vignan } from '@/lib/vignan-client';
 import { Course } from '@/lib/mock-data';
 import { Card } from '@/components/ui/card';
@@ -11,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Play, Clock, Users, Zap, FileText, BookOpen, CheckCircle2, QrCode, KeyRound } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { FileViewer } from '@/components/file-viewer';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { QRScanner } from '@/components/qr-scanner';
 import { toast } from 'sonner';
@@ -111,22 +113,10 @@ export default function CourseDetailPage({ params: paramsPromise }: { params: Pr
     }
   };
 
-  if (loading) {
+  if (loading || !course) {
     return (
       <DashboardLayout>
-        <div className="flex items-center justify-center h-screen">
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
-      </DashboardLayout>
-    );
-  }
-
-  if (!user || !course) {
-    return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center h-screen">
-          <p className="text-muted-foreground">Course Loading...</p>
-        </div>
+        <LoadingScreen />
       </DashboardLayout>
     );
   }
@@ -160,29 +150,107 @@ export default function CourseDetailPage({ params: paramsPromise }: { params: Pr
     <DashboardLayout>
       <div className="space-y-8 pb-16 md:pb-0">
         {/* Course Header */}
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
+          <div className="space-y-4 flex-1">
+            <div>
+              <p className="text-sm text-muted-foreground mb-2">
+                {course.category}
+              </p>
+              <h1 className="text-4xl font-bold font-outfit">{course.title}</h1>
+            </div>
+
+            <div className="flex flex-wrap gap-4 text-sm text-muted-foreground border-b pb-4">
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4" />
+                <span>Instructor: {course.instructor}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4" />
+                <span>Duration: {course.duration}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <BookOpen className="w-4 h-4" />
+                <span>{course.lessons.length} lessons</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Attendance Entry */}
+          <Card className="w-full md:w-80 shrink-0 border-primary/20 bg-primary/5 p-4 shadow-sm">
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 font-bold text-primary">
+                <QrCode className="w-5 h-5" />
+                <span>Attendance</span>
+              </div>
+              <p className="text-xs text-muted-foreground">Enter the 6-digit code provided by your instructor to mark your presence.</p>
+              
+              <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+                <DialogTrigger asChild>
+                  <Button className="w-full gap-2 shadow-md">
+                    <Zap className="w-4 h-4" />
+                    Enter Session Code
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Mark Attendance</DialogTitle>
+                  </DialogHeader>
+                  <Tabs defaultValue="code" className="w-full">
+                    <TabsList className="grid w-full grid-cols-2">
+                      <TabsTrigger value="code">Enter Code</TabsTrigger>
+                      <TabsTrigger value="qr">Scan QR</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="code" className="space-y-6 pt-4">
+                      <div className="flex flex-col items-center gap-6 text-center">
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium">Session Code</p>
+                          <p className="text-sm text-muted-foreground">
+                            Enter the 6-digit code provided during the session
+                          </p>
+                        </div>
+                        <div className="flex flex-col items-center gap-4">
+                          <InputOTP 
+                            maxLength={6} 
+                            value={otpValue} 
+                            onChange={setOtpValue}
+                            onComplete={(v) => handleLiveAttendance(v)}
+                          >
+                            <InputOTPGroup>
+                              <InputOTPSlot index={0} />
+                              <InputOTPSlot index={1} />
+                              <InputOTPSlot index={2} />
+                              <InputOTPSlot index={3} />
+                              <InputOTPSlot index={4} />
+                              <InputOTPSlot index={5} />
+                            </InputOTPGroup>
+                          </InputOTP>
+                          <Button 
+                            className="w-full gap-2" 
+                            onClick={() => handleLiveAttendance(otpValue)}
+                            disabled={otpValue.length !== 6}
+                          >
+                            <KeyRound className="w-4 h-4" />
+                            Submit Code
+                          </Button>
+                        </div>
+                      </div>
+                    </TabsContent>
+                    <TabsContent value="qr" className="space-y-4 pt-4">
+                      <div className="flex flex-col items-center gap-4 text-center">
+                        <p className="text-sm text-muted-foreground">
+                          Scan the QR code shown during the session
+                        </p>
+                        <QRScanner onScan={(text) => handleLiveAttendance(text)} />
+                      </div>
+                    </TabsContent>
+                  </Tabs>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </Card>
+        </div>
+
         <div className="space-y-4">
-          <div>
-            <p className="text-sm text-muted-foreground mb-2">
-              {course.category}
-            </p>
-            <h1 className="text-4xl font-bold">{course.title}</h1>
-          </div>
-
-          <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <Users className="w-4 h-4" />
-              <span>Instructor: {course.instructor}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4" />
-              <span>Duration: {course.duration}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <BookOpen className="w-4 h-4" />
-              <span>{course.lessons.length} lessons</span>
-            </div>
-          </div>
-
           {/* Progress Bar */}
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
@@ -216,22 +284,23 @@ export default function CourseDetailPage({ params: paramsPromise }: { params: Pr
               {/* Video Player */}
               <div className="lg:col-span-2 space-y-4">
                 <Card className="overflow-hidden">
-                  <div className="aspect-video bg-primary/10 flex items-center justify-center relative group">
-                    <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Play className="w-16 h-16 text-white" />
-                    </div>
-                    <div className="text-center space-y-2">
-                      <Play className="w-12 h-12 text-primary mx-auto" />
-                      <p className="text-muted-foreground font-medium">
-                        {currentLesson.title}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {currentLesson.duration} minutes
-                      </p>
-                    </div>
-                  </div>
+                  <FileViewer 
+                    url={currentLesson.videoUrl || ""} 
+                    type="video/mp4" 
+                    title={currentLesson.title}
+                  />
                   <div className="p-6 space-y-4">
                     <h2 className="text-2xl font-bold">{currentLesson.title}</h2>
+                    {currentLesson.attachmentUrl && (
+                      <div className="pt-2">
+                        <p className="text-sm font-semibold mb-2">Lesson Attachment:</p>
+                        <FileViewer 
+                          url={currentLesson.attachmentUrl} 
+                          type={currentLesson.attachmentType || undefined} 
+                          title={`${currentLesson.title} Attachment`}
+                        />
+                      </div>
+                    )}
                     <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                       <div className="flex items-center gap-2">
                         <Clock className="w-4 h-4" />

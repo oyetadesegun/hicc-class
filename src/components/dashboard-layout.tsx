@@ -28,9 +28,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
     { href: '/dashboard', label: 'Dashboard', icon: Home },
     { href: '/admin', label: 'Admin', icon: LayoutDashboard },
     { href: '/admin/attendance', label: 'Attendance Report', icon: BarChart3 },
-    { href: '/courses', label: 'Courses', icon: BookOpen },
-    { href: '/assignments', label: 'Assignments', icon: FileText },
-    { href: '/certificates', label: 'Certificates', icon: Award },
+    { href: '/certificates', label: 'Certificates', icon: Award, comingSoon: true },
     { href: '/profile', label: 'Profile', icon: User },
   ];
 
@@ -64,6 +62,11 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
                 <div className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-primary/10 hover:text-primary transition-colors cursor-pointer group">
                   <item.icon className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
                   <span className="text-sm font-medium">{item.label}</span>
+                  {(item as any).comingSoon && (
+                    <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded bg-primary/10 text-primary uppercase tracking-tight">
+                      Soon
+                    </span>
+                  )}
                 </div>
               </Link>
             ))}

@@ -62,7 +62,9 @@ model Lesson {
   id        String   @id @default(cuid())
   title     String
   duration  String
-  videoUrl  String
+  videoUrl  String?
+  attachmentUrl String?
+  attachmentType String?
   order     Int
   courseId  String
   course    Course   @relation(fields: [courseId], references: [id])
@@ -101,6 +103,8 @@ model Assignment {
   dueDate     DateTime
   courseId    String
   course      Course   @relation(fields: [courseId], references: [id])
+  attachmentUrl String?
+  attachmentType String?
   submissions Submission[]
 }
 

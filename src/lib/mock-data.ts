@@ -30,7 +30,9 @@ export interface Course {
 export interface Lesson {
   id: string;
   title: string;
-  videoUrl: string;
+  videoUrl?: string;
+  attachmentUrl?: string;
+  attachmentType?: string;
   duration: number; // in minutes
   order: number;
 }
@@ -49,6 +51,8 @@ export interface Assignment {
   title: string;
   description: string;
   dueDate: string;
+  attachmentUrl?: string;
+  attachmentType?: string;
   submissions: Record<string, AssignmentSubmission>; // studentId -> submission
 }
 

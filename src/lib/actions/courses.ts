@@ -254,25 +254,42 @@ export async function submitAttendanceCode(code: string) {
 
 export async function getAttendanceRecords() {
   const userId = await getUserId();
-  if (!userId) throw new Error('Not authenticated');
+  if (!userId) {
+    console.error('getAttendanceRecords: Not authenticated');
+    throw new Error('Not authenticated');
+  }
 
   const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (user?.role !== 'ADMIN') throw new Error('Unauthorized');
+  if (user?.role !== 'ADMIN') {
+    console.error(`getAttendanceRecords: Unauthorized user ${userId} with role ${user?.role}`);
+    throw new Error('Unauthorized');
+  }
 
-  return prisma.attendanceRecord.findMany({
-    include: {
-      user: { select: { name: true, email: true } },
-      lesson: { select: { title: true } },
-      course: { select: { title: true } },
-    },
-    orderBy: { attendedAt: 'desc' }
-  });
+  console.log(`getAttendanceRecords: Fetching records for admin ${user.email}`);
+
+  try {
+    const records = await prisma.attendanceRecord.findMany({
+      include: {
+        user: { select: { name: true, email: true } },
+        lesson: { select: { title: true } },
+        course: { select: { title: true } },
+      },
+      orderBy: { attendedAt: 'desc' }
+    });
+    console.log(`getAttendanceRecords: Found ${records.length} records`);
+    return records;
+  } catch (error) {
+    console.error('getAttendanceRecords: Prisma error:', error);
+    throw error;
+  }
 }
 
 export async function createLesson(courseId: string, data: {
   title: string;
   duration: string;
-  videoUrl: string;
+  videoUrl?: string;
+  attachmentUrl?: string;
+  attachmentType?: string;
   order: number;
 }) {
   const userId = await getUserId();
@@ -317,6 +334,26 @@ export async function deleteLesson(lessonId: string) {
   });
 }
 
+export async function updateLesson(id: string, data: {
+  title?: string;
+  duration?: string;
+  videoUrl?: string;
+  attachmentUrl?: string;
+  attachmentType?: string;
+  order?: number;
+}) {
+  const userId = await getUserId();
+  if (!userId) throw new Error('Not authenticated');
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (user?.role !== 'ADMIN') throw new Error('Unauthorized');
+
+  return prisma.lesson.update({
+    where: { id },
+    data,
+  });
+}
+
 export async function issueCertificate(courseId: string, userId: string) {
   const currentUserId = await getUserId();
   if (!currentUserId) throw new Error('Not authenticated');
@@ -351,4 +388,112 @@ export async function getCertificate(id: string) {
       user: true,
     },
   });
+}
+
+export async function createAssignment(courseId: string, data: {
+  title: string;
+  description: string;
+  dueDate: string | Date;
+  attachmentUrl?: string;
+  attachmentType?: string;
+}) {
+  const userId = await getUserId();
+  if (!userId) throw new Error('Not authenticated');
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (user?.role !== 'ADMIN') throw new Error('Unauthorized');
+
+  return prisma.assignment.create({
+    data: {
+      ...data,
+      dueDate: new Date(data.dueDate),
+      courseId,
+    },
+  });
+}
+
+export async function deleteAssignment(id: string) {
+  const userId = await getUserId();
+  if (!userId) throw new Error('Not authenticated');
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (user?.role !== 'ADMIN') throw new Error('Unauthorized');
+
+  return prisma.assignment.delete({
+    where: { id },
+  });
+}
+
+export async function getEnrolledUsers(courseId: string) {
+  const userId = await getUserId();
+  if (!userId) throw new Error('Not authenticated');
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (user?.role !== 'ADMIN') throw new Error('Unauthorized');
+
+  const enrollments = await prisma.userCourse.findMany({
+    where: { courseId },
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          avatar: true,
+        }
+      }
+    }
+  });
+
+  return enrollments.map(e => e.user);
+}
+
+export async function toggleAttendance(courseId: string, lessonId: string, userId: string, isPresent: boolean) {
+  const adminId = await getUserId();
+  if (!adminId) throw new Error('Not authenticated');
+
+  const admin = await prisma.user.findUnique({ where: { id: adminId } });
+  if (admin?.role !== 'ADMIN') throw new Error('Unauthorized');
+
+  if (isPresent) {
+    // Mark as present
+    return prisma.attendanceRecord.upsert({
+      where: { userId_lessonId: { userId, lessonId } },
+      create: { userId, lessonId, courseId },
+      update: { attendedAt: new Date() },
+    });
+  } else {
+    // Mark as absent (delete record)
+    return prisma.attendanceRecord.deleteMany({
+      where: { userId, lessonId },
+    });
+  }
+}
+
+export async function bulkToggleAttendance(courseId: string, lessonId: string, userIds: string[], isPresent: boolean) {
+  const adminId = await getUserId();
+  if (!adminId) throw new Error('Not authenticated');
+
+  const admin = await prisma.user.findUnique({ where: { id: adminId } });
+  if (admin?.role !== 'ADMIN') throw new Error('Unauthorized');
+
+  if (isPresent) {
+    // Mark all as present
+    const operations = userIds.map(userId => 
+      prisma.attendanceRecord.upsert({
+        where: { userId_lessonId: { userId, lessonId } },
+        create: { userId, lessonId, courseId },
+        update: { attendedAt: new Date() },
+      })
+    );
+    return prisma.$transaction(operations);
+  } else {
+    // Mark all as absent (delete records)
+    return prisma.attendanceRecord.deleteMany({
+      where: {
+        lessonId,
+        userId: { in: userIds }
+      },
+    });
+  }
 }

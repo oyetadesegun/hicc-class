@@ -3,12 +3,16 @@ import { PrismaPg } from '@prisma/adapter-pg'
 import { Pool } from 'pg'
 
 const prismaClientSingleton = () => {
+  const connectionString = `${process.env.DATABASE_URL}${process.env.DATABASE_URL?.includes('?') ? '&' : '?'}application_name=nextjs-dev`
+  
   const pool = new Pool({ 
-    connectionString: process.env.DATABASE_URL,
+    connectionString,
     ssl: { rejectUnauthorized: false },
-    max: 10, // Limit the number of concurrent connections
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 2000,
+    max: 10,
+    idleTimeoutMillis: 60000,
+    connectionTimeoutMillis: 30000,
+    keepAlive: true,
+    statement_timeout: 30000,
   })
   const adapter = new PrismaPg(pool)
   const client = new PrismaClient({ adapter })
@@ -17,6 +21,7 @@ const prismaClientSingleton = () => {
   if (process.env.NODE_ENV !== 'production') {
     (async () => {
       try {
+        console.log('PRISMA: Checking database connectivity...')
         const courseCount = await client.course.count()
         if (courseCount === 0) {
           console.log('PRISMA: Auto-seeding initial data...')
@@ -29,6 +34,7 @@ const prismaClientSingleton = () => {
           }
           
           // Seed Users
+          console.log('PRISMA: Seeding users...')
           for (const user of data.users) {
             await client.user.upsert({
               where: { email: user.email },
@@ -38,6 +44,7 @@ const prismaClientSingleton = () => {
           }
 
           // Seed Course
+          console.log('PRISMA: Seeding courses...')
           for (const courseItem of data.courses) {
             const { lessons, liveSessions, quizzes, exams, ...courseInfo } = courseItem
             await client.course.create({
@@ -50,10 +57,12 @@ const prismaClientSingleton = () => {
               }
             })
           }
-          console.log('PRISMA: Seeding completed')
+          console.log('PRISMA: Seeding completed successfully')
+        } else {
+          console.log(`PRISMA: Database already has ${courseCount} courses, skipping seeding`)
         }
       } catch (err) {
-        console.error('PRISMA: Auto-seeding failed', err)
+        console.error('PRISMA: Auto-seeding failed or database unreachable', err)
       }
     })()
   }

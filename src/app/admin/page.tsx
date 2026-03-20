@@ -4,16 +4,18 @@ import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { DashboardLayout } from '@/components/dashboard-layout';
+import { LoadingScreen } from '@/components/loading-screen';
 import { vignan } from '@/lib/vignan-client';
 import { Course } from '@/lib/mock-data';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, Settings, Users, BarChart3, QrCode, Trash2, BookOpen, Clock, List, ListPlus, Video, X, CheckCircle2 } from 'lucide-react';
+import { Plus, Settings, Users, BarChart3, QrCode, Trash2, BookOpen, Clock, List, ListPlus, Video, X, CheckCircle2, Edit, Save, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { FileUpload } from '@/components/file-upload';
 
 export default function AdminCoursesPage() {
   const { user, loading } = useAuth();
@@ -22,6 +24,8 @@ export default function AdminCoursesPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isAttendanceModalOpen, setIsAttendanceModalOpen] = useState(false);
   const [isLessonModalOpen, setIsLessonModalOpen] = useState(false);
+  const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
+  const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [newCode, setNewCode] = useState('');
 
@@ -29,7 +33,17 @@ export default function AdminCoursesPage() {
     title: '',
     duration: '',
     videoUrl: '',
+    attachmentUrl: '',
+    attachmentType: '',
     order: 1,
+  });
+
+  const [assignmentFormData, setAssignmentFormData] = useState({
+    title: '',
+    description: '',
+    dueDate: '',
+    attachmentUrl: '',
+    attachmentType: '',
   });
 
   const [formData, setFormData] = useState({
@@ -146,26 +160,50 @@ export default function AdminCoursesPage() {
 
   const handleManageLessons = (course: Course) => {
     setSelectedCourse(course);
+    setEditingLessonId(null);
     setLessonFormData({
       title: '',
       duration: '',
       videoUrl: '',
+      attachmentUrl: '',
+      attachmentType: '',
       order: course.lessons.length + 1,
     });
     setIsLessonModalOpen(true);
+  };
+
+  const handleEditLesson = (lesson: any) => {
+    setEditingLessonId(lesson.id);
+    setLessonFormData({
+      title: lesson.title,
+      duration: lesson.duration.toString(),
+      videoUrl: lesson.videoUrl || '',
+      attachmentUrl: lesson.attachmentUrl || '',
+      attachmentType: lesson.attachmentType || '',
+      order: lesson.order,
+    });
   };
 
   const handleCreateLesson = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCourse) return;
     try {
-      await (vignan.entities as any).Lesson.create(selectedCourse.id, lessonFormData);
-      toast.success('Lesson added successfully!');
+      if (editingLessonId) {
+        await (vignan.entities as any).Lesson.update(editingLessonId, lessonFormData);
+        toast.success('Lesson updated successfully!');
+      } else {
+        await (vignan.entities as any).Lesson.create(selectedCourse.id, lessonFormData);
+        toast.success('Lesson added successfully!');
+      }
+      
+      setEditingLessonId(null);
       setLessonFormData({
         title: '',
         duration: '',
         videoUrl: '',
-        order: selectedCourse.lessons.length + 2,
+        attachmentUrl: '',
+        attachmentType: '',
+        order: (selectedCourse?.lessons.length || 0) + 2,
       });
       fetchCourses();
       // Refresh selected course to show new lesson
@@ -174,6 +212,56 @@ export default function AdminCoursesPage() {
       if (updatedCourse) setSelectedCourse(updatedCourse);
     } catch (error) {
       toast.error('Failed to add lesson');
+    }
+  };
+
+  const handleManageAssignments = (course: Course) => {
+    setSelectedCourse(course);
+    setAssignmentFormData({
+      title: '',
+      description: '',
+      dueDate: '',
+      attachmentUrl: '',
+      attachmentType: '',
+    });
+    setIsAssignmentModalOpen(true);
+  };
+
+  const handleCreateAssignment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedCourse) return;
+    try {
+      await (vignan.entities as any).Assignment.create(selectedCourse.id, assignmentFormData);
+      toast.success('Assignment added successfully!');
+      setAssignmentFormData({
+        title: '',
+        description: '',
+        dueDate: '',
+        attachmentUrl: '',
+        attachmentType: '',
+      });
+      fetchCourses();
+      // Refresh selected course
+      const allCourses = await vignan.entities.Course.list();
+      const updatedCourse = allCourses.find((c: Course) => c.id === selectedCourse.id);
+      if (updatedCourse) setSelectedCourse(updatedCourse);
+    } catch (error) {
+      toast.error('Failed to add assignment');
+    }
+  };
+
+  const handleDeleteAssignment = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this assignment?')) return;
+    try {
+      await (vignan.entities as any).Assignment.delete(id);
+      toast.success('Assignment deleted');
+      fetchCourses();
+      // Refresh selected course
+      const allCourses = await vignan.entities.Course.list();
+      const updatedCourse = allCourses.find((c: Course) => c.id === selectedCourse?.id);
+      if (updatedCourse) setSelectedCourse(updatedCourse);
+    } catch (error) {
+      toast.error('Failed to delete assignment');
     }
   };
 
@@ -192,7 +280,13 @@ export default function AdminCoursesPage() {
     }
   };
 
-  if (loading || !user) return null;
+  if (loading || !user) {
+    return (
+      <DashboardLayout>
+        <LoadingScreen />
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -213,8 +307,8 @@ export default function AdminCoursesPage() {
               <DialogHeader>
                 <DialogTitle>Create New Course</DialogTitle>
               </DialogHeader>
-              <form onSubmit={handleCreateCourse} className="grid gap-4 py-4">
-                <div className="grid gap-2">
+              <form onSubmit={handleCreateCourse} className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+                <div className="grid gap-2 md:col-span-2">
                   <Label htmlFor="title">Course Title</Label>
                   <Input 
                     id="title" 
@@ -224,7 +318,7 @@ export default function AdminCoursesPage() {
                     required 
                   />
                 </div>
-                <div className="grid gap-2">
+                <div className="grid gap-2 md:col-span-2">
                   <Label htmlFor="category">Category</Label>
                   <Input 
                     id="category" 
@@ -234,29 +328,27 @@ export default function AdminCoursesPage() {
                     required 
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="instructor">Instructor</Label>
-                    <Input 
-                      id="instructor" 
-                      value={formData.instructor} 
-                      onChange={(e) => setFormData({...formData, instructor: e.target.value})}
-                      placeholder="Doctor Name" 
-                      required 
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="duration">Duration</Label>
-                    <Input 
-                      id="duration" 
-                      value={formData.duration} 
-                      onChange={(e) => setFormData({...formData, duration: e.target.value})}
-                      placeholder="e.g., 8 weeks" 
-                      required 
-                    />
-                  </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="instructor">Instructor</Label>
+                  <Input 
+                    id="instructor" 
+                    value={formData.instructor} 
+                    onChange={(e) => setFormData({...formData, instructor: e.target.value})}
+                    placeholder="Doctor Name" 
+                    required 
+                  />
                 </div>
                 <div className="grid gap-2">
+                  <Label htmlFor="duration">Duration</Label>
+                  <Input 
+                    id="duration" 
+                    value={formData.duration} 
+                    onChange={(e) => setFormData({...formData, duration: e.target.value})}
+                    placeholder="e.g., 8 weeks" 
+                    required 
+                  />
+                </div>
+                <div className="grid gap-2 md:col-span-2">
                   <Label htmlFor="description">Description</Label>
                   <Textarea 
                     id="description" 
@@ -266,7 +358,7 @@ export default function AdminCoursesPage() {
                     required 
                   />
                 </div>
-                <Button type="submit" className="w-full">Create Course</Button>
+                <Button type="submit" className="md:col-span-2 w-full mt-2">Create Course</Button>
               </form>
             </DialogContent>
           </Dialog>
@@ -301,11 +393,11 @@ export default function AdminCoursesPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 mt-auto">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-auto">
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    className="gap-2"
+                    className="gap-2 w-full justify-start sm:justify-center"
                     onClick={() => handleEditCourse(course)}
                   >
                     <Settings className="w-3.5 h-3.5" />
@@ -314,7 +406,7 @@ export default function AdminCoursesPage() {
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    className="gap-2"
+                    className="gap-2 w-full justify-start sm:justify-center"
                     onClick={() => handleManageLessons(course)}
                   >
                     <ListPlus className="w-3.5 h-3.5" />
@@ -323,7 +415,16 @@ export default function AdminCoursesPage() {
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    className="gap-2 col-span-2"
+                    className="gap-2 w-full justify-start sm:justify-center"
+                    onClick={() => handleManageAssignments(course)}
+                  >
+                    <BookOpen className="w-3.5 h-3.5" />
+                    Assignments
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="gap-2 w-full justify-start sm:justify-center"
                     onClick={() => handleInitiateAttendance(course)}
                   >
                     <QrCode className="w-3.5 h-3.5" />
@@ -332,7 +433,7 @@ export default function AdminCoursesPage() {
                   <Button 
                     variant="ghost" 
                     size="sm" 
-                    className="gap-2 col-span-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    className="gap-2 sm:col-span-2 text-destructive hover:text-destructive hover:bg-destructive/10 w-full justify-start sm:justify-center"
                     onClick={() => handleDeleteCourse(course.id)}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -350,8 +451,8 @@ export default function AdminCoursesPage() {
             <DialogHeader>
               <DialogTitle>Edit Course: {selectedCourse?.title}</DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleUpdateCourse} className="grid gap-4 py-4">
-              <div className="grid gap-2">
+            <form onSubmit={handleUpdateCourse} className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+              <div className="grid gap-2 md:col-span-2">
                 <Label htmlFor="edit-title">Course Title</Label>
                 <Input 
                   id="edit-title" 
@@ -360,7 +461,7 @@ export default function AdminCoursesPage() {
                   required 
                 />
               </div>
-              <div className="grid gap-2">
+              <div className="grid gap-2 md:col-span-2">
                 <Label htmlFor="edit-category">Category</Label>
                 <Input 
                   id="edit-category" 
@@ -369,27 +470,25 @@ export default function AdminCoursesPage() {
                   required 
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="edit-instructor">Instructor</Label>
-                  <Input 
-                    id="edit-instructor" 
-                    value={formData.instructor} 
-                    onChange={(e) => setFormData({...formData, instructor: e.target.value})}
-                    required 
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="edit-duration">Duration</Label>
-                  <Input 
-                    id="edit-duration" 
-                    value={formData.duration} 
-                    onChange={(e) => setFormData({...formData, duration: e.target.value})}
-                    required 
-                  />
-                </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-instructor">Instructor</Label>
+                <Input 
+                  id="edit-instructor" 
+                  value={formData.instructor} 
+                  onChange={(e) => setFormData({...formData, instructor: e.target.value})}
+                  required 
+                />
               </div>
               <div className="grid gap-2">
+                <Label htmlFor="edit-duration">Duration</Label>
+                <Input 
+                  id="edit-duration" 
+                  value={formData.duration} 
+                  onChange={(e) => setFormData({...formData, duration: e.target.value})}
+                  required 
+                />
+              </div>
+              <div className="grid gap-2 md:col-span-2">
                 <Label htmlFor="edit-description">Description</Label>
                 <Textarea 
                   id="edit-description" 
@@ -398,7 +497,7 @@ export default function AdminCoursesPage() {
                   required 
                 />
               </div>
-              <Button type="submit" className="w-full">Update Course</Button>
+              <Button type="submit" className="md:col-span-2 w-full mt-2">Update Course</Button>
             </form>
           </DialogContent>
         </Dialog>
@@ -483,30 +582,40 @@ export default function AdminCoursesPage() {
                   Current Lessons ({selectedCourse?.lessons.length})
                 </h3>
                 <div className="space-y-2">
-                  {selectedCourse?.lessons.length === 0 ? (
+                    {selectedCourse?.lessons.length === 0 ? (
                     <p className="text-sm text-muted-foreground italic p-4 border rounded-lg border-dashed text-center">
                       No lessons added yet.
                     </p>
                   ) : (
                     selectedCourse?.lessons.map((lesson) => (
-                      <div key={lesson.id} className="flex items-center justify-between p-3 rounded-lg border bg-muted/30 group">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
+                      <div key={lesson.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg border bg-muted/30 group gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-8 h-8 shrink-0 rounded bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
                             {lesson.order}
                           </div>
-                          <div>
-                            <p className="font-medium text-sm">{lesson.title}</p>
-                            <p className="text-xs text-muted-foreground">{lesson.duration} mins • {lesson.videoUrl}</p>
+                          <div className="min-w-0">
+                            <p className="font-medium text-sm truncate">{lesson.title}</p>
+                            <p className="text-xs text-muted-foreground truncate">{lesson.duration} mins • {lesson.videoUrl}</p>
                           </div>
                         </div>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={() => handleDeleteLesson(lesson.id)}
-                        >
-                          <X className="w-4 h-4" />
-                        </Button>
+                        <div className="flex items-center gap-1 justify-end opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="text-primary h-8 w-8"
+                            onClick={() => handleEditLesson(lesson)}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="text-destructive h-8 w-8"
+                            onClick={() => handleDeleteLesson(lesson.id)}
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </div>
                     ))
                   )}
@@ -516,11 +625,11 @@ export default function AdminCoursesPage() {
               {/* Add New Lesson Form */}
               <div className="space-y-4 border-t pt-6">
                 <h3 className="font-semibold flex items-center gap-2">
-                  <Plus className="w-4 h-4" /> 
-                  Add New Lesson
+                  {editingLessonId ? <Edit className="w-4 h-4" /> : <Plus className="w-4 h-4" />} 
+                  {editingLessonId ? 'Edit Lesson' : 'Add New Lesson'}
                 </h3>
-                <form onSubmit={handleCreateLesson} className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2 col-span-2">
+                <form onSubmit={handleCreateLesson} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid gap-2 md:col-span-2">
                     <Label htmlFor="lesson-title">Lesson Title</Label>
                     <Input 
                       id="lesson-title" 
@@ -550,26 +659,181 @@ export default function AdminCoursesPage() {
                       required 
                     />
                   </div>
-                  <div className="grid gap-2 col-span-2">
-                    <Label htmlFor="lesson-video">Video URL / Provider ID</Label>
-                    <Input 
-                      id="lesson-video" 
-                      value={lessonFormData.videoUrl} 
-                      onChange={(e) => setLessonFormData({...lessonFormData, videoUrl: e.target.value})}
-                      placeholder="e.g., youtube_id or vimeo_id" 
-                      required 
+                  <div className="grid gap-2 md:col-span-2">
+                    <Label>Lesson Video</Label>
+                    <FileUpload 
+                      label="Upload Lesson Video"
+                      accept="video/*"
+                      folder="lessons/videos"
+                      onSuccess={(url) => setLessonFormData({...lessonFormData, videoUrl: url})}
                     />
+                    {lessonFormData.videoUrl && (
+                      <p className="text-xs text-green-600 truncate px-1">Video uploaded: {lessonFormData.videoUrl}</p>
+                    )}
                   </div>
-                  <Button type="submit" className="col-span-2 gap-2">
-                    <Plus className="w-4 h-4" />
-                    Add Lesson to Course
-                  </Button>
+                  <div className="grid gap-2 md:col-span-2">
+                    <Label>Attachment (Optional)</Label>
+                    <FileUpload 
+                      label="Upload Attachment"
+                      accept="*"
+                      folder="lessons/attachments"
+                      onSuccess={(url, type) => setLessonFormData({
+                        ...lessonFormData, 
+                        attachmentUrl: url,
+                        attachmentType: type
+                      })}
+                    />
+                    {lessonFormData.attachmentUrl && (
+                      <p className="text-xs text-green-600 truncate px-1">Attachment uploaded: {lessonFormData.attachmentUrl}</p>
+                    )}
+                  </div>
+                  <div className="md:col-span-2 flex flex-col sm:flex-row gap-2 mt-2">
+                    <Button type="submit" className="flex-1 gap-2">
+                      {editingLessonId ? <Save className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                      {editingLessonId ? 'Update Lesson' : 'Add Lesson to Course'}
+                    </Button>
+                    {editingLessonId && (
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        className="flex-1"
+                        onClick={() => {
+                          setEditingLessonId(null);
+                          setLessonFormData({
+                            title: '',
+                            duration: '',
+                            videoUrl: '',
+                            attachmentUrl: '',
+                            attachmentType: '',
+                            order: (selectedCourse?.lessons.length || 0) + 1,
+                          });
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    )}
+                  </div>
                 </form>
               </div>
             </div>
 
             <DialogFooter className="p-6 border-t bg-muted/20">
               <Button variant="secondary" onClick={() => setIsLessonModalOpen(false)}>
+                Finished
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Assignment Management Modal */}
+        <Dialog open={isAssignmentModalOpen} onOpenChange={setIsAssignmentModalOpen}>
+          <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col p-0 overflow-hidden">
+            <DialogHeader className="p-6 border-b">
+              <DialogTitle>Manage Assignments: {selectedCourse?.title}</DialogTitle>
+              <DialogDescription>Add new assignments or remove existing ones from this course.</DialogDescription>
+            </DialogHeader>
+            
+            <div className="flex-1 overflow-auto p-6 space-y-8">
+              {/* Existing Assignments List */}
+              <div className="space-y-4">
+                <h3 className="font-semibold flex items-center gap-2">
+                  <List className="w-4 h-4" /> 
+                  Current Assignments ({selectedCourse?.assignments.length})
+                </h3>
+                <div className="space-y-2">
+                  {selectedCourse?.assignments.length === 0 ? (
+                    <p className="text-sm text-muted-foreground italic p-4 border rounded-lg border-dashed text-center">
+                      No assignments added yet.
+                    </p>
+                  ) : (
+                    selectedCourse?.assignments.map((assignment) => (
+                      <div key={assignment.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg border bg-muted/30 group gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-8 h-8 shrink-0 rounded bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
+                            <FileText className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-medium text-sm truncate">{assignment.title}</p>
+                            <p className="text-xs text-muted-foreground truncate">Due: {assignment.dueDate}</p>
+                          </div>
+                        </div>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="text-destructive h-8 w-8 self-end sm:self-auto opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => handleDeleteAssignment(assignment.id)}
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Add New Assignment Form */}
+              <div className="space-y-4 border-t pt-6">
+                <h3 className="font-semibold flex items-center gap-2">
+                  <Plus className="w-4 h-4" /> 
+                  Add New Assignment
+                </h3>
+                <form onSubmit={handleCreateAssignment} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid gap-2 md:col-span-2">
+                    <Label htmlFor="assignment-title">Assignment Title</Label>
+                    <Input 
+                      id="assignment-title" 
+                      value={assignmentFormData.title} 
+                      onChange={(e) => setAssignmentFormData({...assignmentFormData, title: e.target.value})}
+                      placeholder="e.g., Reflection Essay" 
+                      required 
+                    />
+                  </div>
+                  <div className="grid gap-2 md:col-span-2">
+                    <Label htmlFor="assignment-due">Due Date</Label>
+                    <Input 
+                      id="assignment-due" 
+                      type="date"
+                      value={assignmentFormData.dueDate} 
+                      onChange={(e) => setAssignmentFormData({...assignmentFormData, dueDate: e.target.value})}
+                      required 
+                    />
+                  </div>
+                  <div className="grid gap-2 md:col-span-2">
+                    <Label htmlFor="assignment-desc">Description</Label>
+                    <Textarea 
+                      id="assignment-desc" 
+                      value={assignmentFormData.description} 
+                      onChange={(e) => setAssignmentFormData({...assignmentFormData, description: e.target.value})}
+                      placeholder="Describe the assignment..." 
+                      required 
+                    />
+                  </div>
+                  <div className="grid gap-2 md:col-span-2">
+                    <Label>Assignment Attachment (Optional)</Label>
+                    <FileUpload 
+                      label="Upload Assignment Document"
+                      accept="*"
+                      folder="assignments/materials"
+                      onSuccess={(url, type) => setAssignmentFormData({
+                        ...assignmentFormData, 
+                        attachmentUrl: url,
+                        attachmentType: type
+                      })}
+                    />
+                    {assignmentFormData.attachmentUrl && (
+                      <p className="text-xs text-green-600 truncate px-1">Attachment uploaded: {assignmentFormData.attachmentUrl}</p>
+                    )}
+                  </div>
+                  <Button type="submit" className="md:col-span-2 gap-2 mt-2">
+                    <Plus className="w-4 h-4" />
+                    Add Assignment to Course
+                  </Button>
+                </form>
+              </div>
+            </div>
+
+            <DialogFooter className="p-6 border-t bg-muted/20">
+              <Button variant="secondary" onClick={() => setIsAssignmentModalOpen(false)}>
                 Finished
               </Button>
             </DialogFooter>
