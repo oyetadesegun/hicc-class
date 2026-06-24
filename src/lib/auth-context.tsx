@@ -56,13 +56,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   };
 
-  const updateUser = async (updatedUser: Student) => {
-    try {
-      const user = await vignan.auth.updateMe(updatedUser);
-      setUser(user);
-    } catch (error) {
-      console.error('Update user error:', error);
-    }
+  const updateUser = (updatedUser: Student) => {
+    setUser(updatedUser);
   };
 
   return (

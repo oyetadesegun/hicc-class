@@ -283,51 +283,57 @@ export default function CourseDetailPage({ params: paramsPromise }: { params: Pr
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Video Player */}
               <div className="lg:col-span-2 space-y-4">
-                <Card className="overflow-hidden">
-                  <FileViewer 
-                    url={currentLesson.videoUrl || ""} 
-                    type="video/mp4" 
-                    title={currentLesson.title}
-                  />
-                  <div className="p-6 space-y-4">
-                    <h2 className="text-2xl font-bold">{currentLesson.title}</h2>
-                    {currentLesson.attachmentUrl && (
-                      <div className="pt-2">
-                        <p className="text-sm font-semibold mb-2">Lesson Attachment:</p>
-                        <FileViewer 
-                          url={currentLesson.attachmentUrl} 
-                          type={currentLesson.attachmentType || undefined} 
-                          title={`${currentLesson.title} Attachment`}
-                        />
-                      </div>
-                    )}
-                    <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-                      <div className="flex items-center gap-2">
-                        <Clock className="w-4 h-4" />
-                        <span>{currentLesson.duration} minutes</span>
-                      </div>
-                    </div>
-                    <div className="pt-4 border-t space-y-3">
-                      <p className="text-sm text-muted-foreground">
-                        This is lesson {selectedLesson + 1} of {course.lessons.length}
-                      </p>
-                      {!watchedLessons.has(currentLesson.id) && (
-                        <Button
-                          onClick={() => handleLessonWatch(currentLesson.id)}
-                          className="w-full"
-                        >
-                          Mark as Watched
-                        </Button>
-                      )}
-                      {watchedLessons.has(currentLesson.id) && (
-                        <div className="flex items-center gap-2 text-sm text-green-600">
-                          <CheckCircle2 className="w-4 h-4" />
-                          <span>Completed</span>
+                {currentLesson ? (
+                  <Card className="overflow-hidden">
+                    <FileViewer 
+                      url={currentLesson.videoUrl || ""} 
+                      type="video/mp4" 
+                      title={currentLesson.title}
+                    />
+                    <div className="p-6 space-y-4">
+                      <h2 className="text-2xl font-bold">{currentLesson.title}</h2>
+                      {currentLesson.attachmentUrl && (
+                        <div className="pt-2">
+                          <p className="text-sm font-semibold mb-2">Lesson Attachment:</p>
+                          <FileViewer 
+                            url={currentLesson.attachmentUrl} 
+                            type={currentLesson.attachmentType || undefined} 
+                            title={`${currentLesson.title} Attachment`}
+                          />
                         </div>
                       )}
+                      <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-4 h-4" />
+                          <span>{currentLesson.duration} minutes</span>
+                        </div>
+                      </div>
+                      <div className="pt-4 border-t space-y-3">
+                        <p className="text-sm text-muted-foreground">
+                          This is lesson {selectedLesson + 1} of {course.lessons.length}
+                        </p>
+                        {!watchedLessons.has(currentLesson.id) && (
+                          <Button
+                            onClick={() => handleLessonWatch(currentLesson.id)}
+                            className="w-full"
+                          >
+                            Mark as Watched
+                          </Button>
+                        )}
+                        {watchedLessons.has(currentLesson.id) && (
+                          <div className="flex items-center gap-2 text-sm text-green-600">
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span>Completed</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </Card>
+                  </Card>
+                ) : (
+                  <Card className="p-12 flex items-center justify-center text-muted-foreground border-dashed">
+                    No lessons have been uploaded for this course yet.
+                  </Card>
+                )}
               </div>
 
               {/* Lessons List */}
