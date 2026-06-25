@@ -569,12 +569,33 @@ async function main() {
     ]
   });
 
-  await prisma.assignment.createMany({
-    data: [
-      { title: "Week 1: Build a Personal Webpage", description: "Create a free Claude account and use it to build a simple one-page website that introduces who you are, what you do, three things you are good at, and a way to contact you. Ensure it is working correctly.", dueDate: sat1, courseId: vibeCourseId! },
-      { title: "Week 2: Build and Publish a Project", description: "Build a project of your choosing (e.g., event page, calculator, contact form) using vibe coding and publish it online to a real URL using Vercel, Netlify, or Replit.", dueDate: sat2, courseId: vibeCourseId! },
-    ]
-  });
+  // Helper to create assignment for a module
+  async function seedAssignmentsForModule(courseId: string, titlePattern: string, assignTitle: string, assignDesc: string, dueDate: Date) {
+    const lesson = await prisma.lesson.findFirst({
+      where: { courseId, title: { contains: titlePattern } }
+    });
+    if (lesson) {
+      await prisma.assignment.create({
+        data: {
+          title: assignTitle,
+          description: assignDesc,
+          dueDate,
+          courseId,
+          lessonId: lesson.id
+        }
+      });
+    }
+  }
+
+  console.log('Seeding Vibecoding Assignments...');
+  await seedAssignmentsForModule(vibeCourseId!, 'Module 1', 'Explain Vibe Coding in Your Own Words', 'Write a short paragraph explaining what vibe coding is as if you were explaining it to a non-technical friend.', sat1);
+  await seedAssignmentsForModule(vibeCourseId!, 'Module 2', 'Identify a Problem Worth Solving', 'Describe a manual, time-consuming task you or your organization faces that could be solved by a custom app.', sat1);
+  await seedAssignmentsForModule(vibeCourseId!, 'Module 3', 'Define Your First Project', 'Write a clear, specific outcome statement for a simple project you want to build this week.', sat1);
+  await seedAssignmentsForModule(vibeCourseId!, 'Module 4', 'Set Up Your Tools', 'Create an account on Claude or Cursor. Submit a screenshot or link of your first conversation with the AI.', sat1);
+  await seedAssignmentsForModule(vibeCourseId!, 'Module 5', 'Write Two Prompts: Vague vs Specific', 'Write a vague prompt for your project, then write a highly specific, effective version of the same prompt. Compare them.', sat2);
+  await seedAssignmentsForModule(vibeCourseId!, 'Module 6', 'Build and Publish a Webpage', 'Use vibe coding to build your first working webpage and publish it. Submit the deployed project URL.', sat2);
+  await seedAssignmentsForModule(vibeCourseId!, 'Module 7', 'Add an Interactive Feature', 'Add a button, form, or interactive element to your webpage. Submit the updated URL and explain what you added.', sat2);
+  await seedAssignmentsForModule(vibeCourseId!, 'Module 8', 'Build Something for Someone Else', 'Build a simple app or page for another person or your church. Submit the URL and describe who it is for.', sat2);
 
   console.log('Vibecoding course seeded!');
 
@@ -638,12 +659,14 @@ async function main() {
     ]
   });
 
-  await prisma.assignment.createMany({
-    data: [
-      { title: "Week 3: Build a Form-to-Email Automation", description: "Log into your Zapier account and build the form-to-email automation demonstrated during class. Ensure you test it and it successfully triggers an email.", dueDate: sat3, courseId: autoCourseId! },
-      { title: "Week 4: Final Showcase Project", description: "Prepare a 2 to 3 minute showcase of something you built during this programme - a vibe coded project, a working automation, or both. Be ready to present it to the class.", dueDate: sat4, courseId: autoCourseId! },
-    ]
-  });
+  console.log('Seeding AI Automation Assignments...');
+  await seedAssignmentsForModule(autoCourseId!, 'Module 9', 'Identify Three Automatable Tasks', 'List three tasks you perform regularly that are repetitive, manual, and could potentially be automated.', sat3);
+  await seedAssignmentsForModule(autoCourseId!, 'Module 10', 'Map a Manual Workflow', 'Pick one task from the previous assignment and write down every single step required to complete it manually.', sat3);
+  await seedAssignmentsForModule(autoCourseId!, 'Module 11', 'Create Your Zapier Account', 'Create a free Zapier account and link it to your most used work email. Describe any issues you faced.', sat3);
+  await seedAssignmentsForModule(autoCourseId!, 'Module 12', 'Build a Form-to-Email Automation', 'Build the Google Forms to Gmail automation. Submit a screenshot or link of your active Zap.', sat3);
+  await seedAssignmentsForModule(autoCourseId!, 'Module 13', 'Build an AI-Powered Automation', 'Add an AI step (like Claude or ChatGPT) to your automation. Describe what it does.', sat4);
+  await seedAssignmentsForModule(autoCourseId!, 'Module 14', 'Design a Church Automation', 'Design a workflow specifically for ministry or church use. Write a detailed plan of the triggers, actions, and filters.', sat4);
+  await seedAssignmentsForModule(autoCourseId!, 'Module 15', 'Final Showcase Preparation', 'Prepare your final project for presentation. Submit the URL (if applicable) and a summary of what you will present.', sat4);
 
   console.log('AI Automation course seeded!');
   console.log('\nAll courses seeded successfully!');

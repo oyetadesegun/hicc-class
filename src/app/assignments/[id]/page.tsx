@@ -4,13 +4,31 @@ import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
 import { DashboardLayout } from '@/components/dashboard-layout';
-import { vignan } from '@/lib/vignan-client';
-import { Assignment, Course } from '@/lib/mock-data';
+import { getAssignmentById, submitAssignment } from '@/lib/actions/assignments';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Calendar, Send, FileText, CheckCircle2 } from 'lucide-react';
-import { FileViewer } from '@/components/file-viewer';
+import { Calendar, Send, FileText, CheckCircle2, ArrowLeft, ExternalLink, BookOpen } from 'lucide-react';
+import { toast } from 'sonner';
+
+interface AssignmentData {
+  id: string;
+  title: string;
+  description: string;
+  dueDate: Date;
+  course: { id: string; title: string };
+  lesson: { id: string; title: string; order: number } | null;
+  submissions: Array<{
+    id: string;
+    status: string;
+    content: any;
+    projectUrl: string | null;
+    feedback: string | null;
+    score: number | null;
+    submittedAt: Date;
+  }>;
+}
 
 export default function AssignmentDetailPage({
   params: paramsPromise,
@@ -20,10 +38,10 @@ export default function AssignmentDetailPage({
   const params = use(paramsPromise);
   const { user, loading } = useAuth();
   const router = useRouter();
-  const [assignment, setAssignment] = useState<Assignment | null>(null);
-  const [course, setCourse] = useState<Course | null>(null);
-  const [content, setContent] = useState('');
-  const [submitted, setSubmitted] = useState(false);
+  const [assignment, setAssignment] = useState<AssignmentData | null>(null);
+  const [fetching, setFetching] = useState(true);
+  const [description, setDescription] = useState('');
+  const [projectUrl, setProjectUrl] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -35,69 +53,46 @@ export default function AssignmentDetailPage({
   useEffect(() => {
     const fetchAssignment = async () => {
       if (!user) return;
-      const courses = await vignan.entities.Course.list();
-      let foundAssignment: Assignment | null = null;
-      let foundCourse: Course | null = null;
-
-      for (const c of courses as Course[]) {
-        const assign = c.assignments.find((a: any) => a.id === params.id);
-        if (assign) {
-          foundAssignment = assign;
-          foundCourse = c;
-          break;
-        }
-      }
-
-      if (foundAssignment) {
-        setAssignment(foundAssignment);
-        setCourse(foundCourse);
-
-        // Check if already submitted
-        if (user.id in foundAssignment.submissions) {
-          setSubmitted(true);
-          setContent(foundAssignment.submissions[user.id].content);
-        }
+      try {
+        const data = await getAssignmentById(params.id);
+        setAssignment(data as AssignmentData | null);
+      } catch (error) {
+        console.error('Failed to fetch assignment:', error);
+      } finally {
+        setFetching(false);
       }
     };
     fetchAssignment();
   }, [params.id, user]);
 
   const handleSubmit = async () => {
-    if (!assignment || !course || !user || !content.trim()) return;
+    if (!assignment || !user || !description.trim()) return;
 
     setSubmitting(true);
-    
+
     try {
-      const updatedAssignments = course.assignments.map(a => {
-        if (a.id === assignment.id) {
-          return {
-            ...a,
-            submissions: {
-              ...a.submissions,
-              [user.id]: {
-                studentId: user.id,
-                submittedAt: new Date().toISOString(),
-                content,
-              }
-            }
-          };
-        }
-        return a;
+      const result = await submitAssignment(assignment.id, {
+        description: description.trim(),
+        projectUrl: projectUrl.trim() || undefined,
       });
 
-      await vignan.entities.Course.update(course.id, {
-        assignments: updatedAssignments
-      });
-
-      setSubmitted(true);
+      if (result.success) {
+        toast.success('Assignment submitted successfully!');
+        // Refresh assignment data to show the submission
+        const refreshed = await getAssignmentById(params.id);
+        setAssignment(refreshed as AssignmentData | null);
+      } else {
+        toast.error(result.error || 'Failed to submit assignment');
+      }
     } catch (error) {
       console.error('Assignment submission error:', error);
+      toast.error('An unexpected error occurred');
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (loading) {
+  if (loading || fetching) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-screen">
@@ -107,7 +102,7 @@ export default function AssignmentDetailPage({
     );
   }
 
-  if (!user || !assignment || !course) {
+  if (!user || !assignment) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-screen">
@@ -117,17 +112,38 @@ export default function AssignmentDetailPage({
     );
   }
 
+  const submission = assignment.submissions[0] || null;
+  const isSubmitted = !!submission;
+
   return (
     <DashboardLayout>
-      <div className="max-w-3xl mx-auto space-y-8 py-12 pb-16 md:pb-0">
+      <div className="max-w-3xl mx-auto space-y-6 py-8 pb-16 md:pb-0">
+        {/* Back button */}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => router.back()}
+          className="gap-2"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back
+        </Button>
+
         {/* Header */}
         <div className="space-y-4">
           <div>
-            <p className="text-sm text-muted-foreground mb-2">
-              {course.title}
-            </p>
-            <h1 className="text-4xl font-bold flex items-center gap-3">
-              <FileText className="w-8 h-8" />
+            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+              <BookOpen className="w-4 h-4" />
+              <span>{assignment.course.title}</span>
+              {assignment.lesson && (
+                <>
+                  <span className="text-muted-foreground/50">·</span>
+                  <span>Lesson {assignment.lesson.order}</span>
+                </>
+              )}
+            </div>
+            <h1 className="text-3xl font-bold flex items-center gap-3">
+              <FileText className="w-7 h-7 flex-shrink-0" />
               {assignment.title}
             </h1>
           </div>
@@ -135,9 +151,17 @@ export default function AssignmentDetailPage({
           <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4" />
-              <span>Due: {assignment.dueDate}</span>
+              <span>
+                Due:{' '}
+                {new Date(assignment.dueDate).toLocaleDateString('en-GB', {
+                  weekday: 'long',
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric',
+                })}
+              </span>
             </div>
-            {submitted && (
+            {isSubmitted && (
               <div className="flex items-center gap-2 text-green-600 font-medium">
                 <CheckCircle2 className="w-4 h-4" />
                 <span>Submitted</span>
@@ -147,79 +171,125 @@ export default function AssignmentDetailPage({
         </div>
 
         {/* Assignment Description */}
-        <Card className="p-8 space-y-4">
-          <h2 className="text-xl font-semibold">Assignment Details</h2>
-          <p className="text-muted-foreground whitespace-pre-wrap">
+        <Card className="p-6 md:p-8 space-y-4">
+          <h2 className="text-lg font-semibold">Assignment Details</h2>
+          <p className="text-muted-foreground whitespace-pre-wrap leading-relaxed">
             {assignment.description}
           </p>
-          {assignment.attachmentUrl && (
-            <div className="pt-4 border-t">
-              <p className="text-sm font-semibold mb-2">Assignment Attachment:</p>
-              <FileViewer 
-                url={assignment.attachmentUrl} 
-                type={assignment.attachmentType || undefined} 
-                title={`${assignment.title} Attachment`}
-              />
-            </div>
-          )}
         </Card>
 
-        {/* Submission Form */}
-        <Card className="p-8 space-y-6">
-          <h2 className="text-xl font-semibold">
-            {submitted ? 'Your Submission' : 'Submit Your Work'}
+        {/* Submission Form / View */}
+        <Card className="p-6 md:p-8 space-y-6">
+          <h2 className="text-lg font-semibold">
+            {isSubmitted ? 'Your Submission' : 'Submit Your Work'}
           </h2>
 
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium block mb-2">
-                Your Response
-              </label>
-              <Textarea
-                placeholder="Type your assignment response here..."
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                disabled={submitted}
-                className="min-h-[300px] resize-none"
-              />
-            </div>
+          {isSubmitted ? (
+            // ── Read-only view of existing submission ──
+            <div className="space-y-5">
+              {submission.projectUrl && (
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-muted-foreground">
+                    Project URL
+                  </label>
+                  <a
+                    href={submission.projectUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-primary hover:underline break-all"
+                  >
+                    <ExternalLink className="w-4 h-4 flex-shrink-0" />
+                    {submission.projectUrl}
+                  </a>
+                </div>
+              )}
 
-            {submitted && (
-              <div className="bg-green-50 border border-green-200 p-4 rounded-lg space-y-2">
-                <p className="text-sm font-medium text-green-900">
-                  ✓ Submitted on{' '}
-                  {new Date(
-                    assignment.submissions[user.id].submittedAt
-                  ).toLocaleString()}
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-muted-foreground">
+                  Your Response
+                </label>
+                <div className="rounded-lg border bg-muted/30 p-4 text-sm whitespace-pre-wrap">
+                  {(submission.content as any)?.description || ''}
+                </div>
+              </div>
+
+              <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 p-4 rounded-lg space-y-2">
+                <p className="text-sm font-medium text-green-900 dark:text-green-200">
+                  Submitted on{' '}
+                  {new Date(submission.submittedAt).toLocaleString('en-GB', {
+                    weekday: 'short',
+                    day: 'numeric',
+                    month: 'short',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
                 </p>
-                <p className="text-sm text-green-800">
-                  Your instructor will review your submission and provide
-                  feedback.
+                <p className="text-sm text-green-800 dark:text-green-300">
+                  {submission.status === 'GRADED'
+                    ? `Graded: ${submission.score ?? 'N/A'}`
+                    : 'Your instructor will review your submission and provide feedback.'}
                 </p>
               </div>
-            )}
 
-            {!submitted && (
+              {/* Instructor Feedback */}
+              {submission.feedback && (
+                <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 p-4 rounded-lg space-y-2">
+                  <p className="text-sm font-medium text-blue-900 dark:text-blue-200">
+                    Instructor Feedback
+                  </p>
+                  <p className="text-sm text-blue-800 dark:text-blue-300 whitespace-pre-wrap">
+                    {submission.feedback}
+                  </p>
+                </div>
+              )}
+            </div>
+          ) : (
+            // ── Editable submission form ──
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <label className="text-sm font-medium block">
+                  Project URL{' '}
+                  <span className="text-muted-foreground font-normal">
+                    (optional - paste your deployed project link)
+                  </span>
+                </label>
+                <Input
+                  type="url"
+                  placeholder="https://your-project.vercel.app"
+                  value={projectUrl}
+                  onChange={(e) => setProjectUrl(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium block">
+                  Your Response{' '}
+                  <span className="text-destructive">*</span>
+                </label>
+                <Textarea
+                  placeholder="Describe your work, what you built, how you approached it, and any challenges you faced..."
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className="min-h-[200px] resize-y"
+                />
+                <p className="text-xs text-muted-foreground text-right">
+                  {description.length.toLocaleString()} / 10,000
+                </p>
+              </div>
+
               <Button
                 onClick={handleSubmit}
-                disabled={!content.trim() || submitting}
+                disabled={!description.trim() || submitting}
                 size="lg"
                 className="w-full"
               >
                 <Send className="w-4 h-4 mr-2" />
                 {submitting ? 'Submitting...' : 'Submit Assignment'}
               </Button>
-            )}
-          </div>
+            </div>
+          )}
         </Card>
-
-        <Button
-          variant="outline"
-          onClick={() => router.back()}
-          className="w-full"
-        >
-          Back
-        </Button>
       </div>
     </DashboardLayout>
   );

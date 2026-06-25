@@ -336,6 +336,33 @@ export default function CourseDetailPage({ params: paramsPromise }: { params: Pr
                           </div>
                         </div>
                       )}
+                      {/* Per-Lesson Assignment Card */}
+                      {currentLesson.assignments && currentLesson.assignments.length > 0 && (
+                        <div className="pt-4 border-t">
+                          <div className="rounded-lg border-2 border-amber-200 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-800 p-5 space-y-3">
+                            <div className="flex items-center gap-2">
+                              <FileText className="w-5 h-5 text-amber-600" />
+                              <h3 className="font-semibold text-amber-900 dark:text-amber-200">
+                                Assignment for this Lesson
+                              </h3>
+                            </div>
+                            <p className="text-sm text-amber-800 dark:text-amber-300">
+                              {currentLesson.assignments[0].title}
+                            </p>
+                            <p className="text-xs text-amber-700/80 dark:text-amber-400/70 line-clamp-2">
+                              {currentLesson.assignments[0].description}
+                            </p>
+                            <Button
+                              variant="outline"
+                              className="w-full border-amber-300 bg-white hover:bg-amber-100 text-amber-900 dark:bg-amber-950 dark:hover:bg-amber-900 dark:text-amber-200"
+                              onClick={() => router.push(`/assignments/${currentLesson.assignments[0].id}`)}
+                            >
+                              <FileText className="w-4 h-4 mr-2" />
+                              Take Assignment
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                       <div className="pt-4 border-t space-y-3">
                         <p className="text-sm text-muted-foreground">
                           This is lesson {selectedLesson + 1} of {course.lessons.length}
@@ -531,7 +558,7 @@ export default function CourseDetailPage({ params: paramsPromise }: { params: Pr
                           {assignment.description}
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          Due: {assignment.dueDate}
+                          Due: {new Date(assignment.dueDate).toLocaleDateString()}
                         </p>
                       </div>
                     </div>

@@ -2,23 +2,28 @@
 
 import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { DashboardLayout } from '@/components/dashboard-layout';
-import { vignan } from '@/lib/vignan-client';
-import { Course, Assignment } from '@/lib/mock-data';
+import { getUserAssignments } from '@/lib/actions/assignments';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { FileText, Calendar, CheckCircle2 } from 'lucide-react';
+import { FileText, Calendar, CheckCircle2, Clock, ExternalLink } from 'lucide-react';
 
-interface CourseAssignment extends Assignment {
-  courseId: string;
-  courseName: string;
+interface AssignmentWithMeta {
+  id: string;
+  title: string;
+  description: string;
+  dueDate: Date;
+  course: { id: string; title: string };
+  lesson: { id: string; title: string; order: number } | null;
+  submissions: Array<{ id: string; status: string; submittedAt: Date }>;
 }
 
 export default function AssignmentsPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
-  const [assignments, setAssignments] = useState<CourseAssignment[]>([]);
+  const [assignments, setAssignments] = useState<AssignmentWithMeta[]>([]);
+  const [fetching, setFetching] = useState(true);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -29,29 +34,20 @@ export default function AssignmentsPage() {
   useEffect(() => {
     const fetchAssignments = async () => {
       if (user) {
-        const courses = await vignan.entities.Course.list();
-        const enrolledCourses = (courses as Course[]).filter((c: any) =>
-          user.enrolledCourses.includes(c.id)
-        );
-
-        const allAssignments: CourseAssignment[] = [];
-        enrolledCourses.forEach(course => {
-          course.assignments.forEach(assignment => {
-            allAssignments.push({
-              ...assignment,
-              courseId: course.id,
-              courseName: course.title,
-            });
-          });
-        });
-
-        setAssignments(allAssignments);
+        try {
+          const data = await getUserAssignments();
+          setAssignments(data as AssignmentWithMeta[]);
+        } catch (error) {
+          console.error('Failed to fetch assignments:', error);
+        } finally {
+          setFetching(false);
+        }
       }
     };
     fetchAssignments();
   }, [user]);
 
-  if (loading) {
+  if (loading || fetching) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-screen">
@@ -65,7 +61,7 @@ export default function AssignmentsPage() {
     return null;
   }
 
-  const isDueSoon = (dueDate: string) => {
+  const isDueSoon = (dueDate: Date) => {
     const today = new Date();
     const due = new Date(dueDate);
     const daysLeft = Math.ceil(
@@ -74,11 +70,18 @@ export default function AssignmentsPage() {
     return daysLeft <= 3 && daysLeft > 0;
   };
 
-  const isOverdue = (dueDate: string) => {
-    const today = new Date();
-    const due = new Date(dueDate);
-    return due < today;
+  const isOverdue = (dueDate: Date) => {
+    return new Date(dueDate) < new Date();
   };
+
+  // Group by course
+  const grouped = assignments.reduce<Record<string, { courseName: string; items: AssignmentWithMeta[] }>>((acc, a) => {
+    if (!acc[a.course.id]) {
+      acc[a.course.id] = { courseName: a.course.title, items: [] };
+    }
+    acc[a.course.id].items.push(a);
+    return acc;
+  }, {});
 
   return (
     <DashboardLayout>
@@ -96,70 +99,101 @@ export default function AssignmentsPage() {
             <div>
               <h3 className="font-semibold text-lg">No assignments yet</h3>
               <p className="text-muted-foreground">
-                Check back later for course assignments
+                Enroll in a course to see your assignments
               </p>
             </div>
           </Card>
         ) : (
-          <div className="space-y-4">
-            {assignments.map((assignment) => {
-              const submitted = Object.keys(assignment.submissions).length > 0;
-              const dueSoon = isDueSoon(assignment.dueDate);
-              const overdue = isOverdue(assignment.dueDate);
+          <div className="space-y-8">
+            {Object.entries(grouped).map(([courseId, { courseName, items }]) => (
+              <div key={courseId} className="space-y-4">
+                <h2 className="text-xl font-semibold border-b pb-2">{courseName}</h2>
+                <div className="space-y-3">
+                  {items.map((assignment) => {
+                    const submitted = assignment.submissions.length > 0;
+                    const dueSoon = isDueSoon(assignment.dueDate);
+                    const overdue = isOverdue(assignment.dueDate);
 
-              return (
-                <Card
-                  key={assignment.id}
-                  className={`p-6 space-y-4 ${
-                    overdue ? 'border-destructive/50 bg-destructive/5' : ''
-                  } ${dueSoon && !overdue ? 'border-yellow-600/50 bg-yellow-50' : ''}`}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 space-y-2">
-                      <div className="flex items-center gap-3">
-                        <FileText className="w-5 h-5 text-secondary flex-shrink-0" />
-                        <h3 className="font-semibold text-lg">
-                          {assignment.title}
-                        </h3>
-                        {submitted && (
-                          <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0" />
-                        )}
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {assignment.courseName}
-                      </p>
-                      <p className="text-sm text-muted-foreground mt-2">
-                        {assignment.description}
-                      </p>
-                      <div className="flex items-center gap-2 text-sm pt-2">
-                        <Calendar className="w-4 h-4 text-muted-foreground" />
-                        <span
-                          className={
-                            overdue
-                              ? 'text-destructive font-medium'
-                              : dueSoon
-                              ? 'text-yellow-600 font-medium'
-                              : 'text-muted-foreground'
+                    return (
+                      <Card
+                        key={assignment.id}
+                        className={`p-5 space-y-3 transition-colors ${
+                          submitted
+                            ? 'border-green-200 bg-green-50/30 dark:border-green-800 dark:bg-green-950/20'
+                            : overdue
+                            ? 'border-destructive/50 bg-destructive/5'
+                            : dueSoon
+                            ? 'border-yellow-600/50 bg-yellow-50 dark:bg-yellow-950/20'
+                            : ''
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 space-y-2">
+                            <div className="flex items-center gap-3">
+                              <FileText className="w-5 h-5 text-secondary flex-shrink-0" />
+                              <h3 className="font-semibold text-base">
+                                {assignment.title}
+                              </h3>
+                              {submitted && (
+                                <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0" />
+                              )}
+                            </div>
+                            {assignment.lesson && (
+                              <p className="text-xs text-muted-foreground pl-8">
+                                Lesson {assignment.lesson.order}: {assignment.lesson.title}
+                              </p>
+                            )}
+                            <p className="text-sm text-muted-foreground pl-8 line-clamp-2">
+                              {assignment.description}
+                            </p>
+                            <div className="flex items-center gap-2 text-sm pl-8 pt-1">
+                              <Calendar className="w-4 h-4 text-muted-foreground" />
+                              <span
+                                className={
+                                  submitted
+                                    ? 'text-green-600 font-medium'
+                                    : overdue
+                                    ? 'text-destructive font-medium'
+                                    : dueSoon
+                                    ? 'text-yellow-600 font-medium'
+                                    : 'text-muted-foreground'
+                                }
+                              >
+                                {submitted
+                                  ? 'Submitted'
+                                  : `Due: ${new Date(assignment.dueDate).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}`}
+                                {!submitted && overdue && ' (Overdue)'}
+                                {!submitted && dueSoon && !overdue && ' (Due soon)'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <Button
+                          variant={submitted ? 'outline' : 'default'}
+                          className="w-full"
+                          onClick={() =>
+                            router.push(`/assignments/${assignment.id}`)
                           }
                         >
-                          Due: {assignment.dueDate}
-                          {overdue && ' (Overdue)'}
-                          {dueSoon && !overdue && ' (Due soon)'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <Button
-                    onClick={() =>
-                      router.push(`/assignments/${assignment.id}`)
-                    }
-                  >
-                    {submitted ? 'View Submission' : 'Submit Assignment'}
-                  </Button>
-                </Card>
-              );
-            })}
+                          {submitted ? (
+                            <>
+                              <ExternalLink className="w-4 h-4 mr-2" />
+                              View Submission
+                            </>
+                          ) : (
+                            <>
+                              <FileText className="w-4 h-4 mr-2" />
+                              Submit Assignment
+                            </>
+                          )}
+                        </Button>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>

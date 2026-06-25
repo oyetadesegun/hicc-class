@@ -14,7 +14,10 @@ async function getUserId() {
 export async function getCourses() {
   const courses = await prisma.course.findMany({
     include: {
-      lessons: { orderBy: { order: 'asc' } },
+      lessons: {
+        orderBy: { order: 'asc' },
+        include: { assignments: true },
+      },
       liveSessions: true,
       assignments: true,
       quizzes: true,
@@ -34,7 +37,10 @@ export async function getCourse(id: string) {
   const course = await prisma.course.findUnique({
     where: { id },
     include: {
-      lessons: { orderBy: { order: 'asc' } },
+      lessons: {
+        orderBy: { order: 'asc' },
+        include: { assignments: true },
+      },
       liveSessions: true,
       assignments: true,
       quizzes: true,
