@@ -62,6 +62,7 @@ model Lesson {
   id        String   @id @default(cuid())
   title     String
   duration  String
+  content   String?
   videoUrl  String?
   attachmentUrl String?
   attachmentType String?

@@ -16,6 +16,7 @@ import { FileViewer } from '@/components/file-viewer';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { QRScanner } from '@/components/qr-scanner';
 import { toast } from 'sonner';
+import ReactMarkdown from 'react-markdown';
 
 export default function CourseDetailPage({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
   const params = use(paramsPromise);
@@ -120,6 +121,8 @@ export default function CourseDetailPage({ params: paramsPromise }: { params: Pr
       </DashboardLayout>
     );
   }
+
+  if (!user) return null;
 
   const isEnrolled = user.enrolledCourses.includes(params.id);
   const currentLesson = course.lessons[selectedLesson];
@@ -285,11 +288,29 @@ export default function CourseDetailPage({ params: paramsPromise }: { params: Pr
               <div className="lg:col-span-2 space-y-4">
                 {currentLesson ? (
                   <Card className="overflow-hidden">
-                    <FileViewer 
-                      url={currentLesson.videoUrl || ""} 
-                      type="video/mp4" 
-                      title={currentLesson.title}
-                    />
+                    {currentLesson.videoUrl && (() => {
+                      const ytMatch = currentLesson.videoUrl!.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]+)/);
+                      if (ytMatch) {
+                        return (
+                          <div className="aspect-video w-full overflow-hidden bg-black">
+                            <iframe
+                              src={`https://www.youtube.com/embed/${ytMatch[1]}`}
+                              className="h-full w-full"
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                              allowFullScreen
+                              title={currentLesson.title}
+                            />
+                          </div>
+                        );
+                      }
+                      return (
+                        <FileViewer 
+                          url={currentLesson.videoUrl || ""} 
+                          type="video/mp4" 
+                          title={currentLesson.title}
+                        />
+                      );
+                    })()}
                     <div className="p-6 space-y-4">
                       <h2 className="text-2xl font-bold">{currentLesson.title}</h2>
                       {currentLesson.attachmentUrl && (
@@ -308,6 +329,13 @@ export default function CourseDetailPage({ params: paramsPromise }: { params: Pr
                           <span>{currentLesson.duration} minutes</span>
                         </div>
                       </div>
+                      {currentLesson.content && (
+                        <div className="pt-4 pb-2 border-t">
+                          <div className="prose prose-sm md:prose-base dark:prose-invert max-w-none break-words">
+                            <ReactMarkdown>{currentLesson.content}</ReactMarkdown>
+                          </div>
+                        </div>
+                      )}
                       <div className="pt-4 border-t space-y-3">
                         <p className="text-sm text-muted-foreground">
                           This is lesson {selectedLesson + 1} of {course.lessons.length}
@@ -490,72 +518,90 @@ export default function CourseDetailPage({ params: paramsPromise }: { params: Pr
           {/* Assignments Tab */}
           <TabsContent value="assignments" className="space-y-6">
             <div className="space-y-4">
-              {course.assignments.map((assignment) => (
-                <Card key={assignment.id} className="p-6 space-y-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 space-y-2">
-                      <h3 className="font-semibold text-lg flex items-center gap-2">
-                        <FileText className="w-5 h-5 text-secondary" />
-                        {assignment.title}
-                      </h3>
-                      <p className="text-muted-foreground">
-                        {assignment.description}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        Due: {assignment.dueDate}
-                      </p>
+              {course.assignments && course.assignments.length > 0 ? (
+                course.assignments.map((assignment) => (
+                  <Card key={assignment.id} className="p-6 space-y-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 space-y-2">
+                        <h3 className="font-semibold text-lg flex items-center gap-2">
+                          <FileText className="w-5 h-5 text-secondary" />
+                          {assignment.title}
+                        </h3>
+                        <p className="text-muted-foreground">
+                          {assignment.description}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Due: {assignment.dueDate}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                  <Button
-                    variant="outline"
-                    onClick={() => router.push(`/assignments/${assignment.id}`)}
-                  >
-                    View Assignment
-                  </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => router.push(`/assignments/${assignment.id}`)}
+                    >
+                      View Assignment
+                    </Button>
+                  </Card>
+                ))
+              ) : (
+                <Card className="p-12 text-center text-muted-foreground border-dashed">
+                  No assignments available for this course yet.
                 </Card>
-              ))}
+              )}
             </div>
           </TabsContent>
 
           {/* Quiz Tab */}
           <TabsContent value="quiz" className="space-y-6">
-            <Card className="p-8 space-y-6">
-              <div>
-                <h2 className="text-2xl font-bold mb-2">{course.quiz.title}</h2>
-                <p className="text-muted-foreground">
-                  {course.quiz.questions.length} questions • Passing score:{' '}
-                  {course.quiz.passingScore}%
-                </p>
-              </div>
-              <Button
-                size="lg"
-                onClick={() => router.push(`/quiz/${course.quiz.id}`)}
-              >
-                Take Quiz
-              </Button>
-            </Card>
+            {course.quiz ? (
+              <Card className="p-8 space-y-6">
+                <div>
+                  <h2 className="text-2xl font-bold mb-2">{course.quiz.title}</h2>
+                  <p className="text-muted-foreground">
+                    {course.quiz.questions.length} questions • Passing score:{' '}
+                    {course.quiz.passingScore}%
+                  </p>
+                </div>
+                <Button
+                  size="lg"
+                  onClick={() => router.push(`/quiz/${course.quiz.id}`)}
+                >
+                  Take Quiz
+                </Button>
+              </Card>
+            ) : (
+              <Card className="p-12 text-center text-muted-foreground border-dashed">
+                No quiz available for this course yet.
+              </Card>
+            )}
           </TabsContent>
 
           {/* Exam Tab */}
           <TabsContent value="exam" className="space-y-6">
-            <Card className="p-8 space-y-6">
-              <div>
-                <h2 className="text-2xl font-bold mb-2">{course.exam.title}</h2>
-                <p className="text-muted-foreground">
-                  {course.exam.questions.length} questions • {course.exam.duration}{' '}
-                  minutes • Passing score: {course.exam.passingScore}%
-                </p>
-              </div>
-              <Button
-                size="lg"
-                onClick={() => router.push(`/exam/${course.exam.id}`)}
-                disabled={watchedLessons.size < course.lessons.length}
-              >
-                {watchedLessons.size < course.lessons.length
-                  ? 'Complete all lessons first'
-                  : 'Take Exam'}
-              </Button>
-            </Card>
+            {course.exam ? (
+              <Card className="p-8 space-y-6">
+                <div>
+                  <h2 className="text-2xl font-bold mb-2">{course.exam.title}</h2>
+                  <p className="text-muted-foreground">
+                    {course.exam.questions.length} questions • {course.exam.duration}{' '}
+                    minutes • Passing score: {course.exam.passingScore}%
+                  </p>
+                </div>
+                <Button
+                  size="lg"
+                  onClick={() => router.push(`/exam/${course.exam.id}`)}
+                  disabled={watchedLessons.size < course.lessons.length}
+                >
+                  {watchedLessons.size < course.lessons.length
+                    ? 'Complete all lessons first'
+                    : 'Take Exam'}
+                </Button>
+              </Card>
+            ) : (
+              <Card className="p-12 text-center text-muted-foreground border-dashed">
+                No exam available for this course yet.
+              </Card>
+            )}
           </TabsContent>
         </Tabs>
       </div>

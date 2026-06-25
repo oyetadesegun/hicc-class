@@ -287,6 +287,7 @@ export async function getAttendanceRecords() {
 export async function createLesson(courseId: string, data: {
   title: string;
   duration: string;
+  content?: string;
   videoUrl?: string;
   attachmentUrl?: string;
   attachmentType?: string;
@@ -337,6 +338,7 @@ export async function deleteLesson(lessonId: string) {
 export async function updateLesson(id: string, data: {
   title?: string;
   duration?: string;
+  content?: string;
   videoUrl?: string;
   attachmentUrl?: string;
   attachmentType?: string;
