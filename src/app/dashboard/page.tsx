@@ -5,17 +5,18 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { DashboardLayout } from '@/components/dashboard-layout';
 import { LoadingScreen } from '@/components/loading-screen';
-import { vignan } from '@/lib/vignan-client';
-import { Course } from '@/lib/mock-data';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { BookOpen, Award, BarChart3 } from 'lucide-react';
+import { BookOpen, Award, BarChart3, TrendingUp } from 'lucide-react';
+import { getStudentDashboardSummary } from '@/lib/actions/progress';
+
+type DashboardSummary = Awaited<ReturnType<typeof getStudentDashboardSummary>>;
 
 export default function DashboardPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [availableCourses, setAvailableCourses] = useState<Course[]>([]);
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [fetching, setFetching] = useState(true);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -27,22 +28,18 @@ export default function DashboardPage() {
     const fetchDashboardCourses = async () => {
       if (!user) return;
       try {
-        const enrolled = await vignan.entities.Course.enrolled();
-        setCourses(enrolled);
-
-        const allCourses = await vignan.entities.Course.list();
-        const available = allCourses.filter(c => 
-          !enrolled.some(e => e.id === c.id)
-        );
-        setAvailableCourses(available);
+        const data = await getStudentDashboardSummary();
+        setSummary(data);
       } catch (error) {
-        console.error('Failed to fetch dashboard courses:', error);
+        console.error('Failed to fetch dashboard summary:', error);
+      } finally {
+        setFetching(false);
       }
     };
     fetchDashboardCourses();
   }, [user]);
 
-  if (loading) {
+  if (loading || fetching) {
     return (
       <DashboardLayout>
         <LoadingScreen />
@@ -54,27 +51,32 @@ export default function DashboardPage() {
     return null;
   }
 
+  const courses = summary?.enrolledCourses ?? [];
+  const availableCourses = summary?.availableCourses ?? [];
+
   const stats = [
     {
       label: 'Courses Enrolled',
-      value: user.enrolledCourses.length,
+      value: summary?.stats.coursesEnrolled ?? 0,
       icon: BookOpen,
       color: 'text-primary',
     },
     {
       label: 'Certificates Earned',
-      value: user.certificates.length,
+      value: summary?.stats.certificatesEarned ?? 0,
       icon: Award,
       color: 'text-accent',
     },
     {
+      label: 'Average Progress',
+      value: summary?.stats.averageProgress ?? 0,
+      icon: TrendingUp,
+      color: 'text-green-600',
+      suffix: '%',
+    },
+    {
       label: 'Average Attendance',
-      value: user.enrolledCourses.length > 0
-        ? Math.round(
-            Object.values(user.attendance).reduce((a, b) => a + b, 0) /
-            user.enrolledCourses.length
-          )
-        : 0,
+      value: summary?.stats.averageAttendance ?? 0,
       icon: BarChart3,
       color: 'text-secondary',
       suffix: '%',
@@ -93,7 +95,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           {stats.map((stat, i) => (
             <Card key={i} className="p-6 space-y-4">
               <div className="flex items-center justify-between">
@@ -130,7 +132,10 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {courses.map((course) => (
                 <Card key={course.id} className="overflow-hidden hover:border-primary/50 transition-colors">
-                  <div className="h-40 bg-linear-to-br from-primary/20 to-accent/20" />
+                  <div
+                    className="h-40 bg-cover bg-center bg-no-repeat bg-linear-to-br from-primary/20 to-accent/20"
+                    style={{ backgroundImage: course.thumbnail ? `url(${course.thumbnail})` : undefined }}
+                  />
                   <div className="p-6 space-y-4">
                     <div>
                       <p className="text-xs text-muted-foreground mb-1">
@@ -145,16 +150,20 @@ export default function DashboardPage() {
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Progress</span>
                         <span className="font-medium">
-                          {user.attendance[course.id] || 0}%
+                          {course.progress ?? 0}%
                         </span>
                       </div>
                       <div className="w-full bg-muted rounded-full h-2">
                         <div
                           className="bg-primary h-2 rounded-full transition-all"
                           style={{
-                            width: `${user.attendance[course.id] || 0}%`,
+                            width: `${course.progress ?? 0}%`,
                           }}
                         />
+                      </div>
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>{course.completedItems ?? 0}/{course.totalRequiredItems ?? 0} items complete</span>
+                        <span>{course.attendance ?? 0}% attendance</span>
                       </div>
                     </div>
                     <Button 

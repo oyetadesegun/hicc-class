@@ -18,6 +18,8 @@ import { QRScanner } from '@/components/qr-scanner';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 
+const WHATSAPP_GROUP_LINK = 'https://chat.whatsapp.com/CGhSYILSI9hCQFA3Weix0N';
+
 export default function CourseDetailPage({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
   const params = use(paramsPromise);
   const { user, loading } = useAuth();
@@ -119,6 +121,18 @@ export default function CourseDetailPage({ params: paramsPromise }: { params: Pr
     setIsModalOpen(true);
   };
 
+  const getSessionJoinUrl = (session: any) => {
+    if (typeof session.link === 'string' && /^https?:\/\//i.test(session.link)) {
+      return session.link;
+    }
+
+    return WHATSAPP_GROUP_LINK;
+  };
+
+  const handleJoinLiveSession = (session: any) => {
+    window.open(getSessionJoinUrl(session), '_blank', 'noopener,noreferrer');
+  };
+
   if (loading || fetching || !course) {
     return (
       <DashboardLayout>
@@ -134,6 +148,84 @@ export default function CourseDetailPage({ params: paramsPromise }: { params: Pr
   const totalItems = course.lessons.length + course.liveSessions.length;
   const attendedItems = watchedLessons.size + attendedLiveSessions.size;
   const progressPercentage = totalItems === 0 ? 0 : Math.round((attendedItems / totalItems) * 100);
+  const liveSessions = [...(course.liveSessions || [])].sort(
+    (a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime()
+  );
+  const sessionsToMark = liveSessions.filter((session: any) => !attendedLiveSessions.has(session.id));
+  const attendedSessions = liveSessions.filter((session: any) => attendedLiveSessions.has(session.id));
+
+  const renderLiveSessionCard = (session: any) => {
+    const hasAttended = attendedLiveSessions.has(session.id);
+    const isFutureSession = false; // new Date(session.date).getTime() > Date.now();
+
+    return (
+      <Card key={session.id} className={`p-6 space-y-4 transition-colors ${hasAttended ? 'border-green-200 bg-green-50/30 dark:border-green-800 dark:bg-green-950/20' : ''} ${isFutureSession ? 'opacity-75 bg-muted/20' : ''}`}>
+        <div className="flex items-start gap-4">
+          <Zap className={`w-8 h-8 shrink-0 mt-1 ${hasAttended ? 'text-green-500' : isFutureSession ? 'text-muted-foreground/50' : 'text-accent'}`} />
+          <div className="flex-1 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+              <h2 className="text-xl font-bold">
+                {session.title}
+              </h2>
+              {hasAttended ? (
+                <div className="flex items-center gap-2 text-sm text-green-600 font-medium px-3 py-1 bg-green-100 dark:bg-green-900/40 rounded-full border border-green-200 dark:border-green-800 w-fit">
+                  <CheckCircle className="w-4 h-4" />
+                  <span>Attended</span>
+                </div>
+              ) : isFutureSession ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium px-3 py-1 bg-muted rounded-full border w-fit">
+                  <Calendar className="w-4 h-4" />
+                  <span>Upcoming</span>
+                </div>
+              ) : null}
+            </div>
+
+            <p className="text-muted-foreground">
+              {session.description}
+            </p>
+            <div className="space-y-2">
+              <p className="text-sm">
+                <span className="font-medium">Instructor:</span>{' '}
+                {session.instructor}
+              </p>
+              <p className="text-sm">
+                <span className="font-medium">Scheduled:</span>{' '}
+                {new Date(session.date).toLocaleString('en-GB', {
+                  weekday: 'long',
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 pt-2">
+              <Button
+                className="flex-1 sm:flex-none"
+                disabled={isFutureSession}
+                onClick={() => handleJoinLiveSession(session)}
+              >
+                Join Live Session
+              </Button>
+              {!hasAttended && (
+                <Button
+                  variant={isFutureSession ? "outline" : "secondary"}
+                  className="gap-2"
+                  onClick={() => openAttendanceModal(session.id)}
+                  disabled={isFutureSession}
+                >
+                  <QrCode className="w-4 h-4" />
+                  {isFutureSession ? 'Available Soon' : 'Mark Attendance'}
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </Card>
+    );
+  };
 
   if (!isEnrolled) {
     return (
@@ -360,82 +452,42 @@ export default function CourseDetailPage({ params: paramsPromise }: { params: Pr
 
           {/* Live Sessions Tab */}
           <TabsContent value="live" className="space-y-6">
-            <div className="space-y-4">
-              {course.liveSessions && course.liveSessions.length > 0 ? (
-                course.liveSessions.map((session: any) => {
-                  const hasAttended = attendedLiveSessions.has(session.id);
-                  const isFutureSession = false; // new Date(session.date).getTime() > Date.now();
+            {liveSessions.length > 0 ? (
+              <Tabs defaultValue="mark-attendance" className="space-y-5">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="mark-attendance">
+                    Mark Attendance ({sessionsToMark.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="attended">
+                    Attended Classes ({attendedSessions.length})
+                  </TabsTrigger>
+                </TabsList>
 
-                  return (
-                    <Card key={session.id} className={`p-6 space-y-4 transition-colors ${hasAttended ? 'border-green-200 bg-green-50/30 dark:border-green-800 dark:bg-green-950/20' : ''} ${isFutureSession ? 'opacity-75 bg-muted/20' : ''}`}>
-                      <div className="flex items-start gap-4">
-                        <Zap className={`w-8 h-8 shrink-0 mt-1 ${hasAttended ? 'text-green-500' : isFutureSession ? 'text-muted-foreground/50' : 'text-accent'}`} />
-                        <div className="flex-1 space-y-3">
-                          <div className="flex justify-between items-start">
-                            <h2 className="text-xl font-bold">
-                              {session.title}
-                            </h2>
-                            {hasAttended ? (
-                              <div className="flex items-center gap-2 text-sm text-green-600 font-medium px-3 py-1 bg-green-100 dark:bg-green-900/40 rounded-full border border-green-200 dark:border-green-800">
-                                <CheckCircle className="w-4 h-4" />
-                                <span>Attended</span>
-                              </div>
-                            ) : isFutureSession ? (
-                              <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium px-3 py-1 bg-muted rounded-full border">
-                                <Calendar className="w-4 h-4" />
-                                <span>Upcoming</span>
-                              </div>
-                            ) : null}
-                          </div>
-
-                          <p className="text-muted-foreground">
-                            {session.description}
-                          </p>
-                          <div className="space-y-2">
-                            <p className="text-sm">
-                              <span className="font-medium">Instructor:</span>{' '}
-                              {session.instructor}
-                            </p>
-                            <p className="text-sm">
-                              <span className="font-medium">Scheduled:</span>{' '}
-                              {new Date(session.date).toLocaleString('en-GB', {
-                                weekday: 'long',
-                                day: 'numeric',
-                                month: 'long',
-                                year: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })}
-                            </p>
-                          </div>
-
-                          <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                            <Button className="flex-1 sm:flex-none" disabled={isFutureSession}>
-                              Join Live Session
-                            </Button>
-                            {!hasAttended && (
-                              <Button
-                                variant={isFutureSession ? "outline" : "secondary"}
-                                className="gap-2"
-                                onClick={() => openAttendanceModal(session.id)}
-                                disabled={isFutureSession}
-                              >
-                                <QrCode className="w-4 h-4" />
-                                {isFutureSession ? 'Available Soon' : 'Mark Attendance'}
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
+                <TabsContent value="mark-attendance" className="space-y-4">
+                  {sessionsToMark.length > 0 ? (
+                    sessionsToMark.map(renderLiveSessionCard)
+                  ) : (
+                    <Card className="p-12 text-center text-muted-foreground border-dashed">
+                      You have marked attendance for all available classes.
                     </Card>
-                  );
-                })
-              ) : (
+                  )}
+                </TabsContent>
+
+                <TabsContent value="attended" className="space-y-4">
+                  {attendedSessions.length > 0 ? (
+                    attendedSessions.map(renderLiveSessionCard)
+                  ) : (
+                    <Card className="p-12 text-center text-muted-foreground border-dashed">
+                      No attended classes yet. Mark attendance for a class and it will appear here.
+                    </Card>
+                  )}
+                </TabsContent>
+              </Tabs>
+            ) : (
                 <p className="text-muted-foreground text-center py-12">
                   No live sessions scheduled yet
                 </p>
-              )}
-            </div>
+            )}
 
             {/* Global Modal for Attendance */}
             <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>

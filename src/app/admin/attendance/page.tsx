@@ -44,9 +44,7 @@ import {
   BookOpen,
   CheckCircle,
   XCircle,
-  KeyRound,
   Loader2,
-  Copy,
   Zap,
   QrCode,
   Edit,
@@ -80,9 +78,9 @@ export default function AdminAttendancePage() {
     }
   }, [user, loading, router]);
 
-  const fetchData = async () => {
+  const fetchData = async ({ showLoading = true }: { showLoading?: boolean } = {}) => {
     try {
-      setIsDataLoading(true);
+      if (showLoading) setIsDataLoading(true);
       const [attendanceData, courseList] = await Promise.all([
         vignan.entities.Course.getAttendanceReports(),
         vignan.entities.Course.list()
@@ -97,7 +95,7 @@ export default function AdminAttendancePage() {
       console.error('Failed to fetch attendance data:', error);
       toast.error('Failed to load attendance data');
     } finally {
-      setIsDataLoading(false);
+      if (showLoading) setIsDataLoading(false);
     }
   };
 
@@ -171,24 +169,28 @@ export default function AdminAttendancePage() {
     try {
       setGeneratingCodeFor(sessionId);
       const res = await generateSessionCode(sessionId);
-      if (res.success) {
-        toast.success(`New code generated: ${res.code}`);
-        
-        // Optimistically update the UI to instantly show the new code without waiting for network
-        setCourses(prev => prev.map(course => ({
-          ...course,
-          liveSessions: (course.liveSessions || []).map(session => 
-            session.id === sessionId 
-              ? { ...session, secretCode: res.code || '', codeGeneratedAt: new Date().toISOString() } as any
-              : session
-          )
-        })));
-        
-        await fetchData(); // refresh to show the new code
-      } else {
+
+      if (!res.success || !res.code) {
         toast.error(res.error || 'Failed to generate code');
+        return;
       }
+
+      setCourses(prev => prev.map(course => ({
+        ...course,
+        liveSessions: (course.liveSessions || []).map(session =>
+          session.id === sessionId
+            ? { ...session, secretCode: res.code, codeGeneratedAt: res.codeGeneratedAt } as any
+            : session
+        )
+      })));
+
+      toast.success(`New code generated: ${res.code}`);
+
+      fetchData({ showLoading: false }).catch((error) => {
+        console.error('Failed to refresh attendance data after code generation:', error);
+      });
     } catch (error) {
+      console.error('Generate code error:', error);
       toast.error('An unexpected error occurred');
     } finally {
       setGeneratingCodeFor(null);
@@ -281,6 +283,188 @@ export default function AdminAttendancePage() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const loadImage = (src: string) =>
+    new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = reject;
+      image.src = src;
+    });
+
+  const drawRoundRect = (
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    radius: number
+  ) => {
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + width - radius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    ctx.lineTo(x + width, y + height - radius);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    ctx.lineTo(x + radius, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
+  };
+
+  const drawWrappedText = (
+    ctx: CanvasRenderingContext2D,
+    text: string,
+    x: number,
+    y: number,
+    maxWidth: number,
+    lineHeight: number,
+    align: CanvasTextAlign = 'left'
+  ) => {
+    const words = text.split(' ');
+    let line = '';
+    let currentY = y;
+    ctx.textAlign = align;
+
+    for (const word of words) {
+      const testLine = line ? `${line} ${word}` : word;
+      if (ctx.measureText(testLine).width > maxWidth && line) {
+        ctx.fillText(line, x, currentY);
+        line = word;
+        currentY += lineHeight;
+      } else {
+        line = testLine;
+      }
+    }
+
+    if (line) ctx.fillText(line, x, currentY);
+    return currentY;
+  };
+
+  const handleDownloadAttendanceCard = async (session: any) => {
+    if (!session.secretCode) {
+      toast.error('Generate an attendance code before downloading');
+      return;
+    }
+
+    try {
+      const qrParams = new URLSearchParams({ s: session.id, c: session.secretCode });
+      const qrImage = await loadImage(`/api/qr?${qrParams.toString()}`);
+      const width = 900;
+      const height = 1180;
+      const scale = 2;
+      const canvas = document.createElement('canvas');
+      canvas.width = width * scale;
+      canvas.height = height * scale;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Canvas is not available');
+
+      ctx.scale(scale, scale);
+      ctx.fillStyle = '#fff8ef';
+      ctx.fillRect(0, 0, width, height);
+
+      ctx.shadowColor = 'rgba(15, 23, 42, 0.14)';
+      ctx.shadowBlur = 28;
+      ctx.shadowOffsetY = 10;
+      drawRoundRect(ctx, 54, 46, width - 108, height - 92, 34);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      ctx.shadowColor = 'transparent';
+      ctx.strokeStyle = '#f1d7b2';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.fillStyle = '#f59e0b';
+      ctx.font = '700 30px Arial, sans-serif';
+      ctx.fillText('HARVESTERS', 98, 116);
+
+      ctx.fillStyle = '#111827';
+      ctx.font = '700 42px Arial, sans-serif';
+      drawWrappedText(ctx, session.title, 98, 190, width - 196, 50);
+
+      ctx.fillStyle = '#52617f';
+      ctx.font = '400 28px Arial, sans-serif';
+      const sessionDate = new Date(session.date).toLocaleString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      });
+      ctx.fillText(`${sessionDate} - ${session.duration}`, 98, 260);
+
+      ctx.strokeStyle = '#eadcc8';
+      ctx.beginPath();
+      ctx.moveTo(98, 316);
+      ctx.lineTo(width - 98, 316);
+      ctx.stroke();
+
+      ctx.fillStyle = '#111827';
+      ctx.font = '700 28px Arial, sans-serif';
+      ctx.fillText('ATTENDANCE CODE', 98, 380);
+
+      ctx.fillStyle = '#111827';
+      ctx.font = '700 88px "Courier New", monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(session.secretCode, width / 2, 500);
+
+      if (session.codeGeneratedAt) {
+        ctx.fillStyle = '#52617f';
+        ctx.font = '400 24px Arial, sans-serif';
+        ctx.fillText(
+          `Generated: ${new Date(session.codeGeneratedAt).toLocaleTimeString()} (Expires in 15m)`,
+          width / 2,
+          560
+        );
+      }
+
+      ctx.strokeStyle = '#eadcc8';
+      ctx.beginPath();
+      ctx.moveTo(150, 620);
+      ctx.lineTo(width - 150, 620);
+      ctx.stroke();
+
+      const qrSize = 360;
+      const qrX = (width - qrSize) / 2;
+      const qrY = 670;
+      drawRoundRect(ctx, qrX - 18, qrY - 18, qrSize + 36, qrSize + 36, 16);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      ctx.strokeStyle = '#e5e7eb';
+      ctx.stroke();
+      ctx.drawImage(qrImage, qrX, qrY, qrSize, qrSize);
+
+      ctx.fillStyle = '#52617f';
+      ctx.font = '400 28px Arial, sans-serif';
+      drawWrappedText(
+        ctx,
+        'Students can scan this QR code or manually enter the 6-digit code.',
+        width / 2,
+        1090,
+        width - 220,
+        36,
+        'center'
+      );
+
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+      if (!blob) throw new Error('Could not create image');
+
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const safeTitle = session.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      link.href = downloadUrl;
+      link.download = `${safeTitle || 'attendance'}-${session.secretCode}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(downloadUrl);
+      toast.success('Attendance card downloaded');
+    } catch (error) {
+      console.error('Download attendance card error:', error);
+      toast.error('Could not download attendance card');
+    }
   };
 
 
@@ -475,17 +659,15 @@ export default function AdminAttendancePage() {
                                       </div>
                                       {editingDateFor === session.id ? (
                                         <div className="flex flex-col gap-2 bg-muted/50 p-2 rounded">
-                                          <Input 
-                                            size="sm"
+                                          <Input
                                             className="h-7 text-xs w-full font-semibold"
                                             value={tempTitle}
                                             onChange={(e) => setTempTitle(e.target.value)}
                                             placeholder="Session Title"
                                           />
                                           <div className="flex items-center gap-1">
-                                            <Input 
-                                              type="datetime-local" 
-                                              size="sm" 
+                                            <Input
+                                              type="datetime-local"
                                               className="h-7 text-xs w-full" 
                                               value={tempDate} 
                                               onChange={(e) => setTempDate(e.target.value)} 
@@ -537,6 +719,15 @@ export default function AdminAttendancePage() {
                                                 className="w-32 h-32 rounded shadow-sm border p-1 bg-white"
                                               />
                                             </div>
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              className="w-full h-8 gap-2 text-xs"
+                                              onClick={() => handleDownloadAttendanceCard(session)}
+                                            >
+                                              <Download className="w-3.5 h-3.5" />
+                                              Download Card
+                                            </Button>
                                             <div className="text-[10px] text-center text-muted-foreground">
                                               Students can scan this QR code or manually enter the 6-digit code.
                                             </div>

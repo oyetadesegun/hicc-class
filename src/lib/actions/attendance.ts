@@ -58,25 +58,37 @@ export async function generateSessionCode(sessionId: string) {
   const user = await me();
   if (!user || user.role !== 'ADMIN') return { success: false, error: 'Unauthorized' };
 
-  // Generate a random 6-digit numeric code
-  const newCode = Math.floor(100000 + Math.random() * 900000).toString();
+  if (!sessionId) return { success: false, error: 'Missing session ID' };
+
+  const newCode = crypto.randomInt(100000, 1000000).toString();
+  const generatedAt = new Date();
 
   try {
     const session = await prisma.liveSession.update({
       where: { id: sessionId },
       data: {
         secretCode: newCode,
-        codeGeneratedAt: new Date(),
+        codeGeneratedAt: generatedAt,
+      },
+      select: {
+        id: true,
+        secretCode: true,
+        codeGeneratedAt: true,
       },
     });
     
     revalidatePath('/admin/attendance');
     revalidatePath('/admin');
     
-    return { success: true, code: session.secretCode };
+    return {
+      success: true,
+      sessionId: session.id,
+      code: session.secretCode,
+      codeGeneratedAt: session.codeGeneratedAt?.toISOString() ?? generatedAt.toISOString(),
+    };
   } catch (error) {
     console.error('Failed to generate session code:', error);
-    return { success: false, error: 'Database error' };
+    return { success: false, error: 'Could not generate attendance code' };
   }
 }
 

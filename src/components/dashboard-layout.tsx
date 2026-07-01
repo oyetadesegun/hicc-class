@@ -4,7 +4,7 @@ import { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { Button } from '@/components/ui/button';
-import { BookOpen, Home, FileText, Award, User, LogOut, LayoutDashboard, BarChart3, QrCode } from 'lucide-react';
+import { BookOpen, Home, FileText, Award, User, LogOut, LayoutDashboard, BarChart3, Users } from 'lucide-react';
 import Link from 'next/link';
 
 export function DashboardLayout({ children }: { children: ReactNode }) {
@@ -28,7 +28,9 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
     { href: '/dashboard', label: 'Dashboard', icon: Home },
     { href: '/admin', label: 'Admin', icon: LayoutDashboard },
     { href: '/admin/attendance', label: 'Attendance Report', icon: BarChart3 },
-    { href: '/certificates', label: 'Certificates', icon: Award, comingSoon: true },
+    { href: '/admin/assignments', label: 'Assignment Review', icon: FileText },
+    { href: '/admin/students', label: 'Students', icon: Users },
+    { href: '/certificates', label: 'Certificates', icon: Award },
     { href: '/profile', label: 'Profile', icon: User },
   ];
 
