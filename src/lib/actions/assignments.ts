@@ -3,6 +3,75 @@
 import prisma from '@/lib/prisma';
 import { me } from './auth';
 
+type AssignmentAttachmentInput = {
+  url: string;
+  type: string;
+  name: string;
+};
+
+const ALLOWED_ASSIGNMENT_ATTACHMENT_EXTENSIONS = new Set([
+  'pdf',
+  'doc',
+  'docx',
+  'txt',
+  'md',
+  'zip',
+  'png',
+  'jpg',
+  'jpeg',
+  'webp',
+]);
+
+function normalizeOptionalUrl(value?: string) {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+
+  try {
+    const url = new URL(trimmed);
+    if (!['http:', 'https:'].includes(url.protocol)) {
+      return null;
+    }
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function validateAttachment(attachment?: AssignmentAttachmentInput) {
+  if (!attachment) return null;
+
+  const url = normalizeOptionalUrl(attachment.url);
+  if (!url) {
+    return { error: 'Uploaded file URL is invalid' as const };
+  }
+
+  const imagekitEndpoint = process.env.IMAGEKIT_URL_ENDPOINT;
+  if (imagekitEndpoint) {
+    const uploadHost = new URL(url).host;
+    const imagekitHost = new URL(imagekitEndpoint).host;
+    if (uploadHost !== imagekitHost) {
+      return { error: 'Uploaded file must come from the configured file storage provider' as const };
+    }
+  }
+
+  const name = attachment.name?.trim();
+  if (!name || name.length > 255) {
+    return { error: 'Uploaded file name is invalid' as const };
+  }
+
+  const extension = name.split('.').pop()?.toLowerCase();
+  if (!extension || !ALLOWED_ASSIGNMENT_ATTACHMENT_EXTENSIONS.has(extension)) {
+    return { error: 'Uploaded file type is not allowed' as const };
+  }
+
+  const type = attachment.type?.trim() || 'application/octet-stream';
+  if (type.length > 120) {
+    return { error: 'Uploaded file type is invalid' as const };
+  }
+
+  return { url, type, name };
+}
+
 // ─────────────────────────────────────────────────────────────
 // QUERIES
 // ─────────────────────────────────────────────────────────────
@@ -121,7 +190,7 @@ export async function getUserAssignments() {
  */
 export async function submitAssignment(
   assignmentId: string,
-  data: { description: string; projectUrl?: string }
+  data: { description?: string; projectUrl?: string; attachment?: AssignmentAttachmentInput }
 ) {
   const user = await me();
   if (!user) {
@@ -166,20 +235,24 @@ export async function submitAssignment(
   }
 
   // Validate input
-  if (!data.description || data.description.trim().length === 0) {
-    return { success: false, error: 'Description is required' };
+  const description = data.description?.trim() ?? '';
+  const projectUrl = normalizeOptionalUrl(data.projectUrl);
+  const attachment = validateAttachment(data.attachment);
+
+  if (attachment && 'error' in attachment) {
+    return { success: false, error: attachment.error };
   }
 
-  if (data.description.trim().length > 10000) {
+  if (!description && !projectUrl && !attachment) {
+    return { success: false, error: 'Add a response, project URL, or uploaded file before submitting' };
+  }
+
+  if (description.length > 10000) {
     return { success: false, error: 'Description must be under 10,000 characters' };
   }
 
-  if (data.projectUrl && data.projectUrl.trim().length > 0) {
-    try {
-      new URL(data.projectUrl.trim());
-    } catch {
-      return { success: false, error: 'Please enter a valid URL (e.g., https://example.com)' };
-    }
+  if (data.projectUrl?.trim() && !projectUrl) {
+    return { success: false, error: 'Please enter a valid URL (e.g., https://example.com)' };
   }
 
   // Create submission
@@ -187,8 +260,11 @@ export async function submitAssignment(
     data: {
       type: 'ASSIGNMENT',
       status: 'SUBMITTED',
-      content: { description: data.description.trim() },
-      projectUrl: data.projectUrl?.trim() || null,
+      content: { description },
+      projectUrl,
+      attachmentUrl: attachment && !('error' in attachment) ? attachment.url : null,
+      attachmentType: attachment && !('error' in attachment) ? attachment.type : null,
+      attachmentName: attachment && !('error' in attachment) ? attachment.name : null,
       userId: user.id,
       assignmentId,
     },

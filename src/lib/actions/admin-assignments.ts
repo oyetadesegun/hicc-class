@@ -107,6 +107,9 @@ export async function getAdminAssignmentReviewData() {
           score: submission?.score ?? null,
           feedback: submission?.feedback ?? '',
           projectUrl: submission?.projectUrl ?? null,
+          attachmentUrl: submission?.attachmentUrl ?? null,
+          attachmentType: submission?.attachmentType ?? null,
+          attachmentName: submission?.attachmentName ?? null,
           response,
         };
       })

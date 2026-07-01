@@ -8,13 +8,14 @@ import { toast } from "sonner";
 
 interface FileUploadProps {
   onSuccess: (url: string, fileType: string, fileName: string) => void;
+  onRemove?: () => void;
   folder?: string;
   accept?: string;
   label?: string;
   maxSize?: number; // in MB
 }
 
-export function FileUpload({ onSuccess, folder = "uploads", accept = "*", label = "Upload File", maxSize = 100 }: FileUploadProps) {
+export function FileUpload({ onSuccess, onRemove, folder = "uploads", accept = "*", label = "Upload File", maxSize = 100 }: FileUploadProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -24,8 +25,15 @@ export function FileUpload({ onSuccess, folder = "uploads", accept = "*", label 
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (!isAcceptedFile(file, accept)) {
+      toast.error("This file type is not allowed");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
     if (file.size > maxSize * 1024 * 1024) {
       toast.error(`File is too large. Max size is ${maxSize}MB`);
+      if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
 
@@ -37,13 +45,17 @@ export function FileUpload({ onSuccess, folder = "uploads", accept = "*", label 
       // 1. Get Authentication Parameters
       const authResponse = await fetch("/api/imagekit-auth");
       if (!authResponse.ok) throw new Error("Failed to get authentication parameters");
-      const { signature, token, expire } = await authResponse.json();
+      const { signature, token, expire, publicKey } = await authResponse.json();
+
+      if (!publicKey && !process.env.NEXT_PUBLIC_IMAGEKIT_PUBLIC_KEY) {
+        throw new Error("Missing ImageKit public key");
+      }
 
       // 2. Upload to ImageKit
       const formData = new FormData();
       formData.append("file", file);
       formData.append("fileName", file.name);
-      formData.append("publicKey", process.env.NEXT_PUBLIC_IMAGEKIT_PUBLIC_KEY!);
+      formData.append("publicKey", publicKey || process.env.NEXT_PUBLIC_IMAGEKIT_PUBLIC_KEY!);
       formData.append("signature", signature);
       formData.append("expire", expire.toString());
       formData.append("token", token);
@@ -65,6 +77,7 @@ export function FileUpload({ onSuccess, folder = "uploads", accept = "*", label 
           const response = JSON.parse(xhr.responseText);
           setProgress(100);
           setIsUploading(false);
+          setFileName(response.name || file.name);
           onSuccess(response.url, file.type, file.name);
           toast.success("File uploaded successfully");
         } else {
@@ -86,6 +99,30 @@ export function FileUpload({ onSuccess, folder = "uploads", accept = "*", label 
     }
   };
 
+  const isAcceptedFile = (file: File, acceptedTypes: string) => {
+    if (!acceptedTypes || acceptedTypes === "*") return true;
+
+    const extension = `.${file.name.split(".").pop()?.toLowerCase() || ""}`;
+    const mimeType = file.type.toLowerCase();
+
+    return acceptedTypes
+      .split(",")
+      .map((type) => type.trim().toLowerCase())
+      .filter(Boolean)
+      .some((type) => {
+        if (type.startsWith(".")) return extension === type;
+        if (type.endsWith("/*")) return mimeType.startsWith(type.slice(0, -1));
+        return mimeType === type;
+      });
+  };
+
+  const clearFile = () => {
+    setFileName(null);
+    setProgress(0);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    onRemove?.();
+  };
+
   const getFileIcon = (name: string | null) => {
     if (!name) return <Upload className="w-4 h-4" />;
     const ext = name.split(".").pop()?.toLowerCase();
@@ -105,18 +142,32 @@ export function FileUpload({ onSuccess, folder = "uploads", accept = "*", label 
       />
       
       {!isUploading ? (
-        <Button
-          type="button"
-          variant="outline"
-          className="w-full gap-2 border-dashed h-20 hover:border-primary hover:bg-primary/5"
-          onClick={() => fileInputRef.current?.click()}
-        >
-          {getFileIcon(fileName)}
-          <div className="text-left">
-            <p className="font-medium text-sm">{fileName || label}</p>
-            <p className="text-xs text-muted-foreground">Click to browse or drag and drop</p>
-          </div>
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full gap-2 border-dashed h-20 hover:border-primary hover:bg-primary/5"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {getFileIcon(fileName)}
+            <div className="text-left min-w-0">
+              <p className="font-medium text-sm truncate">{fileName || label}</p>
+              <p className="text-xs text-muted-foreground">Click to browse</p>
+            </div>
+          </Button>
+          {fileName && onRemove && (
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-20 w-12 shrink-0"
+              onClick={clearFile}
+              aria-label="Remove uploaded file"
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          )}
+        </div>
       ) : (
         <div className="space-y-2 p-4 border rounded-lg bg-muted/20">
           <div className="flex items-center justify-between text-sm">

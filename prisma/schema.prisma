@@ -130,6 +130,9 @@ model Submission {
   score        Float?
   content      Json?    // For assignments (text/links)
   projectUrl   String?  // For deployed project submissions
+  attachmentUrl String?  // Student-submitted file URL
+  attachmentType String?
+  attachmentName String?
   answers      Json?    // For quizzes/exams
   feedback     String?  // Instructor feedback
   status       String   @default("SUBMITTED") // SUBMITTED, GRADED

@@ -2,7 +2,7 @@
 
 import { useAuth } from '@/lib/auth-context';
 import { useRouter, useSearchParams } from 'next/navigation';
-import React, { useEffect, useState, useRef } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import { markAttendanceByQR } from '@/lib/actions/attendance';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,17 @@ import { CheckCircle2, XCircle, Loader2, Calendar } from 'lucide-react';
 import Link from 'next/link';
 import { DashboardLayout } from '@/components/dashboard-layout';
 
-export default function AttendPage() {
+function AttendLoadingFallback() {
+  return (
+    <DashboardLayout>
+      <div className="flex h-[60vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    </DashboardLayout>
+  );
+}
+
+function AttendContent() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -69,13 +79,7 @@ export default function AttendPage() {
   }, [user, loading, router, sessionId, code]);
 
   if (loading) {
-    return (
-      <DashboardLayout>
-        <div className="flex h-[60vh] items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </DashboardLayout>
-    );
+    return <AttendLoadingFallback />;
   }
 
   return (
@@ -151,5 +155,13 @@ export default function AttendPage() {
         </Card>
       </div>
     </DashboardLayout>
+  );
+}
+
+export default function AttendPage() {
+  return (
+    <Suspense fallback={<AttendLoadingFallback />}>
+      <AttendContent />
+    </Suspense>
   );
 }

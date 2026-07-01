@@ -13,7 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { getAdminAssignmentReviewData, gradeAssignmentSubmission } from '@/lib/actions/admin-assignments';
-import { CheckCircle2, Clock, ExternalLink, FileText, GraduationCap, Search, XCircle } from 'lucide-react';
+import { CheckCircle2, Clock, ExternalLink, FileText, GraduationCap, Paperclip, Search, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 type AssignmentReviewData = Awaited<ReturnType<typeof getAdminAssignmentReviewData>>;
@@ -245,9 +245,27 @@ export default function AdminAssignmentsPage() {
                       <a href={row.projectUrl} target="_blank" rel="noopener noreferrer"><ExternalLink className="w-4 h-4 mr-2" />Open Project</a>
                     </Button>
                   )}
+                  {row.attachmentUrl && (
+                    <Button variant="outline" size="sm" asChild>
+                      <a href={row.attachmentUrl} target="_blank" rel="noopener noreferrer">
+                        <Paperclip className="w-4 h-4 mr-2" />
+                        {row.attachmentName ? 'Open File' : 'Open Attachment'}
+                      </a>
+                    </Button>
+                  )}
                   {row.submissionId && <Button size="sm" onClick={() => openGradeDialog(row)}>{row.status === 'GRADED' ? 'Update Grade' : 'Grade'}</Button>}
                 </div>
               </div>
+
+              {row.attachmentUrl && (
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-lg border bg-muted/30 p-4 text-sm">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Paperclip className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <span className="font-medium truncate">{row.attachmentName || 'Submitted attachment'}</span>
+                  </div>
+                  {row.attachmentType && <span className="text-xs text-muted-foreground">{row.attachmentType}</span>}
+                </div>
+              )}
 
               {row.response && <div className="rounded-lg border bg-muted/30 p-4 text-sm whitespace-pre-wrap">{row.response}</div>}
 

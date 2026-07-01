@@ -5,12 +5,19 @@ import { useRouter } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
 import { DashboardLayout } from '@/components/dashboard-layout';
 import { getAssignmentById, submitAssignment } from '@/lib/actions/assignments';
+import { FileUpload } from '@/components/file-upload';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Calendar, Send, FileText, CheckCircle2, ArrowLeft, ExternalLink, BookOpen } from 'lucide-react';
+import { Calendar, Send, FileText, CheckCircle2, ArrowLeft, ExternalLink, BookOpen, Paperclip } from 'lucide-react';
 import { toast } from 'sonner';
+
+type AssignmentAttachment = {
+  url: string;
+  type: string;
+  name: string;
+};
 
 interface AssignmentData {
   id: string;
@@ -24,6 +31,9 @@ interface AssignmentData {
     status: string;
     content: any;
     projectUrl: string | null;
+    attachmentUrl: string | null;
+    attachmentType: string | null;
+    attachmentName: string | null;
     feedback: string | null;
     score: number | null;
     submittedAt: Date;
@@ -42,6 +52,7 @@ export default function AssignmentDetailPage({
   const [fetching, setFetching] = useState(true);
   const [description, setDescription] = useState('');
   const [projectUrl, setProjectUrl] = useState('');
+  const [attachment, setAttachment] = useState<AssignmentAttachment | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -66,7 +77,12 @@ export default function AssignmentDetailPage({
   }, [params.id, user]);
 
   const handleSubmit = async () => {
-    if (!assignment || !user || !description.trim()) return;
+    if (!assignment || !user) return;
+
+    if (!description.trim() && !projectUrl.trim() && !attachment) {
+      toast.error('Add a response, project URL, or uploaded file before submitting');
+      return;
+    }
 
     setSubmitting(true);
 
@@ -74,6 +90,7 @@ export default function AssignmentDetailPage({
       const result = await submitAssignment(assignment.id, {
         description: description.trim(),
         projectUrl: projectUrl.trim() || undefined,
+        attachment: attachment ?? undefined,
       });
 
       if (result.success) {
@@ -204,14 +221,33 @@ export default function AssignmentDetailPage({
                 </div>
               )}
 
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-muted-foreground">
-                  Your Response
-                </label>
-                <div className="rounded-lg border bg-muted/30 p-4 text-sm whitespace-pre-wrap">
-                  {(submission.content as any)?.description || ''}
+              {submission.attachmentUrl && (
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-muted-foreground">
+                    Uploaded File
+                  </label>
+                  <a
+                    href={submission.attachmentUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-primary hover:underline break-all"
+                  >
+                    <Paperclip className="w-4 h-4 flex-shrink-0" />
+                    {submission.attachmentName || 'View uploaded file'}
+                  </a>
                 </div>
-              </div>
+              )}
+
+              {(submission.content as any)?.description && (
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-muted-foreground">
+                    Your Response
+                  </label>
+                  <div className="rounded-lg border bg-muted/30 p-4 text-sm whitespace-pre-wrap">
+                    {(submission.content as any)?.description || ''}
+                  </div>
+                </div>
+              )}
 
               <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 p-4 rounded-lg space-y-2">
                 <p className="text-sm font-medium text-green-900 dark:text-green-200">
@@ -264,8 +300,32 @@ export default function AssignmentDetailPage({
 
               <div className="space-y-2">
                 <label className="text-sm font-medium block">
+                  Upload File{' '}
+                  <span className="text-muted-foreground font-normal">
+                    (optional - PDF, document, image, or ZIP)
+                  </span>
+                </label>
+                <FileUpload
+                  folder="assignment-submissions"
+                  accept=".pdf,.doc,.docx,.txt,.md,.zip,.png,.jpg,.jpeg,.webp"
+                  label="Upload assignment file"
+                  maxSize={25}
+                  onSuccess={(url, type, name) => setAttachment({ url, type, name })}
+                  onRemove={() => setAttachment(null)}
+                />
+                {attachment && (
+                  <p className="text-xs text-green-600 truncate px-1">
+                    Ready to submit: {attachment.name}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium block">
                   Your Response{' '}
-                  <span className="text-destructive">*</span>
+                  <span className="text-muted-foreground font-normal">
+                    (optional if you upload a file or project link)
+                  </span>
                 </label>
                 <Textarea
                   placeholder="Describe your work, what you built, how you approached it, and any challenges you faced..."
@@ -280,7 +340,7 @@ export default function AssignmentDetailPage({
 
               <Button
                 onClick={handleSubmit}
-                disabled={!description.trim() || submitting}
+                disabled={(!description.trim() && !projectUrl.trim() && !attachment) || submitting}
                 size="lg"
                 className="w-full"
               >
