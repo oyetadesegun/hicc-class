@@ -46,7 +46,7 @@ export function QRScanner({ onScan, onError }: QRScannerProps) {
   return (
     <div 
       id={scannerId} 
-      className="w-full max-w-sm mx-auto overflow-hidden rounded-xl border bg-black aspect-square" 
+      className="w-full max-w-sm mx-auto overflow-hidden rounded-xl border bg-background aspect-square [&_a]:text-primary [&_a]:underline [&_button]:bg-primary [&_button]:text-primary-foreground [&_button]:px-4 [&_button]:py-2 [&_button]:rounded-md [&_button]:mt-2 flex flex-col justify-center text-center p-4" 
     />
   );
 }

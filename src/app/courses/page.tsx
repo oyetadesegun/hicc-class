@@ -34,12 +34,10 @@ export default function CoursesPage() {
   const handleEnroll = async (courseId: string) => {
     if (!user) return;
     setEnrolling(courseId);
-    
+
     try {
       if (!user.enrolledCourses.includes(courseId)) {
         await vignan.entities.Course.enroll(courseId);
-        
-        // Refresh user data from server to get updated enrollments
         const updatedUser = await vignan.auth.me();
         if (updatedUser) {
           updateUser(updatedUser);
@@ -63,7 +61,6 @@ export default function CoursesPage() {
   if (!user) {
     return null;
   }
-
   return (
     <DashboardLayout>
       <div className="space-y-8 pb-16 md:pb-0">
@@ -106,14 +103,14 @@ export default function CoursesPage() {
                   </div>
                   <div className="space-y-2 mt-auto">
                     {isEnrolled ? (
-                      <Button 
+                      <Button
                         className="w-full"
                         onClick={() => router.push(`/courses/${course.id}`)}
                       >
                         Continue Course
                       </Button>
                     ) : (
-                      <Button 
+                      <Button
                         className="w-full"
                         variant="outline"
                         onClick={() => handleEnroll(course.id)}

@@ -103,6 +103,9 @@ export const entities = {
     createLiveSession: async (courseId: string, data: any) => {
       return await courseActions.createLiveSession(courseId, data);
     },
+    updateLiveSession: async (sessionId: string, data: any) => {
+      return await courseActions.updateLiveSession(sessionId, data);
+    },
     update: async (id: string, data: any) => {
       return await courseActions.updateCourse(id, data);
     },
@@ -123,6 +126,12 @@ export const entities = {
     },
     bulkToggleAttendance: async (courseId: string, lessonId: string, userIds: string[], isPresent: boolean) => {
       return await courseActions.bulkToggleAttendance(courseId, lessonId, userIds, isPresent);
+    },
+    toggleLiveAttendance: async (courseId: string, liveSessionId: string, userId: string, isPresent: boolean) => {
+      return await courseActions.toggleLiveAttendance(courseId, liveSessionId, userId, isPresent);
+    },
+    bulkToggleLiveAttendance: async (courseId: string, liveSessionId: string, userIds: string[], isPresent: boolean) => {
+      return await courseActions.bulkToggleLiveAttendance(courseId, liveSessionId, userIds, isPresent);
     }
   },
   Lesson: {

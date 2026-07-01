@@ -27,7 +27,6 @@ export async function getCourses() {
 
   return courses.map(course => ({
     ...course,
-    liveSession: course.liveSessions[0] || null,
     quiz: course.quizzes[0] || null,
     exam: course.exams[0] || null,
   }));
@@ -52,7 +51,6 @@ export async function getCourse(id: string) {
 
   return {
     ...course,
-    liveSession: course.liveSessions[0] || null,
     quiz: course.quizzes[0] || null,
     exam: course.exams[0] || null,
   };
@@ -192,7 +190,7 @@ export async function createLiveSession(courseId: string, data: {
   console.log('Session data:', data);
 
   try {
-    return await prisma.liveSession.create({
+    const session = await prisma.liveSession.create({
       data: {
         title: data.title,
         description: data.description,
@@ -205,8 +203,48 @@ export async function createLiveSession(courseId: string, data: {
         courseId,
       },
     });
+    
+    revalidatePath('/admin');
+    revalidatePath('/admin/attendance');
+    
+    return session;
   } catch (error) {
     console.error('Prisma Create LiveSession Error:', error);
+    throw error;
+  }
+}
+
+export async function updateLiveSession(sessionId: string, data: {
+  title?: string;
+  description?: string;
+  date?: string | Date;
+  duration?: string;
+  instructor?: string;
+  link?: string;
+}) {
+  const userId = await getUserId();
+  if (!userId) throw new Error('Not authenticated');
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (user?.role !== 'ADMIN') throw new Error('Unauthorized');
+
+  const updateData: any = { ...data };
+  if (data.date) {
+    updateData.date = new Date(data.date);
+  }
+
+  try {
+    const session = await prisma.liveSession.update({
+      where: { id: sessionId },
+      data: updateData,
+    });
+    
+    revalidatePath('/admin');
+    revalidatePath('/admin/attendance');
+    
+    return session;
+  } catch (error) {
+    console.error('Prisma Update LiveSession Error:', error);
     throw error;
   }
 }
@@ -500,8 +538,115 @@ export async function bulkToggleAttendance(courseId: string, lessonId: string, u
     return prisma.attendanceRecord.deleteMany({
       where: {
         lessonId,
-        userId: { in: userIds }
+        userId: { in: userIds },
       },
     });
   }
+}
+
+export async function toggleLiveAttendance(courseId: string, liveSessionId: string, userId: string, isPresent: boolean) {
+  const adminId = await getUserId();
+  if (!adminId) throw new Error('Not authenticated');
+
+  const admin = await prisma.user.findUnique({ where: { id: adminId } });
+  if (admin?.role !== 'ADMIN') throw new Error('Unauthorized');
+
+  if (isPresent) {
+    return prisma.attendanceRecord.upsert({
+      where: { userId_liveSessionId: { userId, liveSessionId } },
+      create: { userId, liveSessionId, courseId },
+      update: { attendedAt: new Date() },
+    });
+  } else {
+    return prisma.attendanceRecord.deleteMany({
+      where: { userId, liveSessionId },
+    });
+  }
+}
+
+import { revalidatePath } from 'next/cache';
+
+export async function bulkToggleLiveAttendance(courseId: string, liveSessionId: string, userIds: string[], isPresent: boolean) {
+  const adminId = await getUserId();
+  if (!adminId) throw new Error('Not authenticated');
+
+  const admin = await prisma.user.findUnique({ where: { id: adminId } });
+  if (admin?.role !== 'ADMIN') throw new Error('Unauthorized');
+
+  if (isPresent) {
+    // Industry standard: Use createMany with skipDuplicates to avoid transaction timeouts on large lists
+    const data = userIds.map(userId => ({
+      userId,
+      liveSessionId,
+      courseId,
+    }));
+    
+    await prisma.attendanceRecord.createMany({
+      data,
+      skipDuplicates: true,
+    });
+  } else {
+    await prisma.attendanceRecord.deleteMany({
+      where: {
+        liveSessionId,
+        userId: { in: userIds },
+      },
+    });
+  }
+  
+  revalidatePath('/admin/attendance');
+  revalidatePath('/admin');
+  return { success: true };
+}
+
+export async function autoMarkAttendance(courseId: string) {
+  const adminId = await getUserId();
+  if (!adminId) throw new Error('Not authenticated');
+
+  const admin = await prisma.user.findUnique({ where: { id: adminId } });
+  if (admin?.role !== 'ADMIN') throw new Error('Unauthorized');
+
+  if (!courseId) throw new Error('Course ID is required');
+
+  // Get all enrolled users
+  const enrollments = await prisma.userCourse.findMany({
+    where: { courseId },
+    select: { userId: true }
+  });
+  
+  if (enrollments.length === 0) {
+    return { totalMarked: 0 };
+  }
+
+  const userIds = enrollments.map(e => e.userId);
+
+  // Get all live sessions for this course
+  const sessions = await prisma.liveSession.findMany({
+    where: { courseId },
+    select: { id: true }
+  });
+
+  if (sessions.length === 0) {
+    return { totalMarked: 0 };
+  }
+
+  let totalMarked = 0;
+  const operations = [];
+
+  for (const session of sessions) {
+    for (const userId of userIds) {
+      operations.push(
+        prisma.attendanceRecord.upsert({
+          where: { userId_liveSessionId: { userId, liveSessionId: session.id } },
+          create: { userId, liveSessionId: session.id, courseId },
+          update: { attendedAt: new Date() },
+        })
+      );
+      totalMarked++;
+    }
+  }
+
+  await prisma.$transaction(operations);
+
+  return { totalMarked };
 }

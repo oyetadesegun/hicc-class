@@ -5,12 +5,12 @@ import { useRouter } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
 import { DashboardLayout } from '@/components/dashboard-layout';
 import { LoadingScreen } from '@/components/loading-screen';
-import { vignan } from '@/lib/vignan-client';
-import { Course } from '@/lib/mock-data';
+import { getCourse } from '@/lib/actions/courses';
+import { markLessonWatched, submitSessionCode, getUserAttendance } from '@/lib/actions/attendance';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Play, Clock, Users, Zap, FileText, BookOpen, CheckCircle2, QrCode, KeyRound } from 'lucide-react';
+import { Play, Clock, Users, Zap, FileText, BookOpen, CheckCircle2, QrCode, KeyRound, CheckCircle, Calendar } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { FileViewer } from '@/components/file-viewer';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
@@ -20,15 +20,22 @@ import ReactMarkdown from 'react-markdown';
 
 export default function CourseDetailPage({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
   const params = use(paramsPromise);
-  const { user, loading, updateUser } = useAuth();
+  const { user, loading } = useAuth();
   const router = useRouter();
-  const [course, setCourse] = useState<Course | undefined>();
+  const [course, setCourse] = useState<any | undefined>();
+  const [fetching, setFetching] = useState(true);
+
   const [selectedLesson, setSelectedLesson] = useState(0);
   const [activeTab, setActiveTab] = useState('lessons');
+
   const [watchedLessons, setWatchedLessons] = useState<Set<string>>(new Set());
-  const [attendedLive, setAttendedLive] = useState(false);
+  const [attendedLiveSessions, setAttendedLiveSessions] = useState<Set<string>>(new Set());
+
+  // States for marking live attendance
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [otpValue, setOtpValue] = useState('');
+  const [submittingLive, setSubmittingLive] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -37,84 +44,82 @@ export default function CourseDetailPage({ params: paramsPromise }: { params: Pr
   }, [user, loading, router]);
 
   useEffect(() => {
-    const fetchCourse = async () => {
-      const courseData = await vignan.entities.Course.get(params.id);
-      if (courseData) {
-        setCourse(courseData);
-        // Initialize watched lessons from localStorage using new prefix
-        const watchedKey = `edu_watched_${user?.id}_${params.id}`;
-        const saved = localStorage.getItem(watchedKey);
-        if (saved) {
-          setWatchedLessons(new Set(JSON.parse(saved)));
+    const fetchData = async () => {
+      try {
+        const courseData = await getCourse(params.id);
+        if (courseData) {
+          setCourse(courseData);
+
+          if (user) {
+            const attendance = await getUserAttendance(params.id);
+            setWatchedLessons(new Set(attendance.watchedLessons));
+            setAttendedLiveSessions(new Set(attendance.attendedLiveSessions));
+          }
         }
-        // Initialize live attendance
-        const liveKey = `edu_live_attended_${user?.id}_${params.id}`;
-        setAttendedLive(localStorage.getItem(liveKey) === 'true');
+      } catch (error) {
+        console.error('Failed to load course details:', error);
+      } finally {
+        setFetching(false);
       }
     };
-    fetchCourse();
+    if (user) {
+      fetchData();
+    }
   }, [params.id, user]);
 
-  const updateAttendance = async (watched: Set<string>, live: boolean) => {
-    if (user && course) {
-      const totalItems = course.lessons.length + (course.liveSession ? 1 : 0);
-      const attendedItems = watched.size + (live ? 1 : 0);
-      const attendancePercentage = Math.round((attendedItems / totalItems) * 100);
-      
-      const updatedAttendance = { ...user.attendance, [params.id]: attendancePercentage };
-      
-      try {
-        await vignan.auth.updateMe({
-          attendance: updatedAttendance
-        });
-        
-        updateUser({
-          ...user,
-          attendance: updatedAttendance
-        });
-      } catch (error) {
-        console.error('Failed to update attendance:', error);
-      }
-    }
-  };
-
   const handleLiveAttendance = async (code: string) => {
+    if (!activeSessionId) return;
+    setSubmittingLive(true);
+
     try {
-      await vignan.entities.Course.submitAttendance(code);
-      setAttendedLive(true);
-      if (user) {
-        const liveKey = `edu_live_attended_${user.id}_${params.id}`;
-        localStorage.setItem(liveKey, 'true');
-        // updateAttendance(watchedLessons, true); // This will be handled by the backend soon
+      const result = await submitSessionCode(code, params.id);
+
+      if (result.success && result.liveSessionId) {
+        setAttendedLiveSessions(prev => new Set(prev).add(result.liveSessionId!));
         setIsModalOpen(false);
         setOtpValue('');
+        setActiveSessionId(null);
         toast.success('Attendance marked successfully!');
-      }
-    } catch (error: any) {
-      if (error.message === 'ALREADY_ATTENDED') {
-        toast.info('You have already taken attendance for this lesson.');
-        setIsModalOpen(false);
-        setOtpValue('');
       } else {
-        toast.error(error.message || 'Invalid attendance code. Please try again.');
+        if (result.error === 'ALREADY_ATTENDED') {
+          toast.info('You have already taken attendance for this session.');
+          setIsModalOpen(false);
+          setOtpValue('');
+          setActiveSessionId(null);
+        } else {
+          toast.error(result.error || 'Invalid attendance code. Please try again.');
+        }
       }
+    } catch (error) {
+      toast.error('An unexpected error occurred. Please try again.');
+    } finally {
+      setSubmittingLive(false);
     }
   };
 
-  const handleLessonWatch = (lessonId: string) => {
+  const handleLessonWatch = async (lessonId: string) => {
+    // Optimistic update
     const newWatched = new Set(watchedLessons);
     newWatched.add(lessonId);
     setWatchedLessons(newWatched);
 
-    // Save to localStorage
-    if (user) {
-      const watchedKey = `edu_watched_${user.id}_${params.id}`;
-      localStorage.setItem(watchedKey, JSON.stringify(Array.from(newWatched)));
-      updateAttendance(newWatched, attendedLive);
+    const result = await markLessonWatched(lessonId, params.id);
+    if (!result.success) {
+      // Revert on failure
+      const reverted = new Set(newWatched);
+      reverted.delete(lessonId);
+      setWatchedLessons(reverted);
+      toast.error(result.error || 'Failed to mark lesson as watched');
     }
   };
 
-  if (loading || !course) {
+  const openAttendanceModal = (sessionId: string) => {
+    setActiveSessionId(sessionId);
+    setOtpValue('');
+    setIsModalOpen(true);
+  };
+
+  if (loading || fetching || !course) {
     return (
       <DashboardLayout>
         <LoadingScreen />
@@ -126,9 +131,9 @@ export default function CourseDetailPage({ params: paramsPromise }: { params: Pr
 
   const isEnrolled = user.enrolledCourses.includes(params.id);
   const currentLesson = course.lessons[selectedLesson];
-  const totalItems = course.lessons.length + (course.liveSession ? 1 : 0);
-  const attendedItems = watchedLessons.size + (attendedLive ? 1 : 0);
-  const progressPercentage = (attendedItems / totalItems) * 100;
+  const totalItems = course.lessons.length + course.liveSessions.length;
+  const attendedItems = watchedLessons.size + attendedLiveSessions.size;
+  const progressPercentage = totalItems === 0 ? 0 : Math.round((attendedItems / totalItems) * 100);
 
   if (!isEnrolled) {
     return (
@@ -178,157 +183,115 @@ export default function CourseDetailPage({ params: paramsPromise }: { params: Pr
             </div>
           </div>
 
-          {/* Quick Attendance Entry */}
-          <Card className="w-full md:w-80 shrink-0 border-primary/20 bg-primary/5 p-4 shadow-sm">
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 font-bold text-primary">
-                <QrCode className="w-5 h-5" />
-                <span>Attendance</span>
+          <Card className="p-6 md:w-80 space-y-4">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-medium">Course Progress</span>
+                <span className="text-muted-foreground">{progressPercentage}% complete</span>
               </div>
-              <p className="text-xs text-muted-foreground">Enter the 6-digit code provided by your instructor to mark your presence.</p>
-              
-              <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-                <DialogTrigger asChild>
-                  <Button className="w-full gap-2 shadow-md">
-                    <Zap className="w-4 h-4" />
-                    Enter Session Code
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-md">
-                  <DialogHeader>
-                    <DialogTitle>Mark Attendance</DialogTitle>
-                  </DialogHeader>
-                  <Tabs defaultValue="code" className="w-full">
-                    <TabsList className="grid w-full grid-cols-2">
-                      <TabsTrigger value="code">Enter Code</TabsTrigger>
-                      <TabsTrigger value="qr">Scan QR</TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="code" className="space-y-6 pt-4">
-                      <div className="flex flex-col items-center gap-6 text-center">
-                        <div className="space-y-2">
-                          <p className="text-sm font-medium">Session Code</p>
-                          <p className="text-sm text-muted-foreground">
-                            Enter the 6-digit code provided during the session
-                          </p>
-                        </div>
-                        <div className="flex flex-col items-center gap-4">
-                          <InputOTP 
-                            maxLength={6} 
-                            value={otpValue} 
-                            onChange={setOtpValue}
-                            onComplete={(v) => handleLiveAttendance(v)}
-                          >
-                            <InputOTPGroup>
-                              <InputOTPSlot index={0} />
-                              <InputOTPSlot index={1} />
-                              <InputOTPSlot index={2} />
-                              <InputOTPSlot index={3} />
-                              <InputOTPSlot index={4} />
-                              <InputOTPSlot index={5} />
-                            </InputOTPGroup>
-                          </InputOTP>
-                          <Button 
-                            className="w-full gap-2" 
-                            onClick={() => handleLiveAttendance(otpValue)}
-                            disabled={otpValue.length !== 6}
-                          >
-                            <KeyRound className="w-4 h-4" />
-                            Submit Code
-                          </Button>
-                        </div>
-                      </div>
-                    </TabsContent>
-                    <TabsContent value="qr" className="space-y-4 pt-4">
-                      <div className="flex flex-col items-center gap-4 text-center">
-                        <p className="text-sm text-muted-foreground">
-                          Scan the QR code shown during the session
-                        </p>
-                        <QRScanner onScan={(text) => handleLiveAttendance(text)} />
-                      </div>
-                    </TabsContent>
-                  </Tabs>
-                </DialogContent>
-              </Dialog>
+              <div className="h-2 bg-secondary/20 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-primary transition-all duration-500 ease-in-out"
+                  style={{ width: `${progressPercentage}%` }}
+                />
+              </div>
             </div>
           </Card>
         </div>
-
-        <div className="space-y-4">
-          {/* Progress Bar */}
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="font-medium">Course Progress</span>
-              <span className="text-muted-foreground">
-                {Math.round(progressPercentage)}% complete
-              </span>
-            </div>
-            <div className="w-full bg-muted rounded-full h-2">
-              <div
-                className="bg-primary h-2 rounded-full transition-all"
-                style={{ width: `${progressPercentage}%` }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Content Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4 md:grid-cols-5">
+        {/* Course Content */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="w-full justify-start overflow-x-auto">
             <TabsTrigger value="lessons">Lessons</TabsTrigger>
-            <TabsTrigger value="live">Live</TabsTrigger>
+            <TabsTrigger value="live">Class Schedule</TabsTrigger>
             <TabsTrigger value="assignments">Assignments</TabsTrigger>
-            <TabsTrigger value="quiz">Quiz</TabsTrigger>
-            <TabsTrigger value="exam" className="hidden md:flex">Exam</TabsTrigger>
           </TabsList>
-
           {/* Lessons Tab */}
           <TabsContent value="lessons" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Video Player */}
-              <div className="lg:col-span-2 space-y-4">
+            <div className="grid md:grid-cols-3 gap-6">
+              {/* Sidebar List */}
+              <div className="space-y-4 md:col-span-1 order-2 md:order-1">
+                <h3 className="font-semibold text-lg">Lessons</h3>
+                <div className="space-y-2 max-h-[600px] overflow-y-auto pr-2">
+                  {course.lessons.map((lesson: any, index: number) => (
+                    <button
+                      key={lesson.id}
+                      onClick={() => setSelectedLesson(index)}
+                      className={`w-full text-left p-4 rounded-lg transition-colors border ${selectedLesson === index
+                        ? 'border-primary bg-primary/5'
+                        : 'border-transparent hover:border-border hover:bg-secondary/50'
+                        }`}
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="text-sm font-medium text-muted-foreground">
+                            Lesson {index + 1}
+                          </span>
+                          {watchedLessons.has(lesson.id) && (
+                            <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0" />
+                          )}
+                        </div>
+                        <p className={`font-medium line-clamp-2 ${selectedLesson === index ? 'text-primary' : ''
+                          }`}>
+                          {lesson.title}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {lesson.duration}m
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Main Viewer area */}
+              <div className="md:col-span-2 order-1 md:order-2">
                 {currentLesson ? (
                   <Card className="overflow-hidden">
-                    {currentLesson.videoUrl && (() => {
-                      const ytMatch = currentLesson.videoUrl!.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]+)/);
-                      if (ytMatch) {
-                        return (
-                          <div className="aspect-video w-full overflow-hidden bg-black">
-                            <iframe
-                              src={`https://www.youtube.com/embed/${ytMatch[1]}`}
-                              className="h-full w-full"
-                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                              allowFullScreen
-                              title={currentLesson.title}
-                            />
-                          </div>
-                        );
-                      }
-                      return (
-                        <FileViewer 
-                          url={currentLesson.videoUrl || ""} 
-                          type="video/mp4" 
-                          title={currentLesson.title}
-                        />
-                      );
-                    })()}
-                    <div className="p-6 space-y-4">
+                    <div className="aspect-video bg-black relative">
+                      {currentLesson.videoUrl ? (
+                        currentLesson.videoUrl.includes('youtube.com') || currentLesson.videoUrl.includes('youtu.be') ? (
+                          <iframe
+                            src={currentLesson.videoUrl.replace('watch?v=', 'embed/').replace('youtu.be/', 'youtube.com/embed/')}
+                            className="w-full h-full"
+                            allowFullScreen
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          />
+                        ) : (
+                          <FileViewer
+                            url={currentLesson.videoUrl}
+                            type="video/mp4"
+                            title={currentLesson.title}
+                          />
+                        )
+                      ) : (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground p-8 text-center space-y-4 bg-secondary/10">
+                          <Play className="w-16 h-16 opacity-20" />
+                          <p>Reading material available below</p>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="p-6 md:p-8 space-y-6">
                       <h2 className="text-2xl font-bold">{currentLesson.title}</h2>
+
                       {currentLesson.attachmentUrl && (
-                        <div className="pt-2">
+                        <div className="pt-4 border-t">
                           <p className="text-sm font-semibold mb-2">Lesson Attachment:</p>
-                          <FileViewer 
-                            url={currentLesson.attachmentUrl} 
-                            type={currentLesson.attachmentType || undefined} 
+                          <FileViewer
+                            url={currentLesson.attachmentUrl}
+                            type={currentLesson.attachmentType || undefined}
                             title={`${currentLesson.title} Attachment`}
                           />
                         </div>
                       )}
+
                       <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                         <div className="flex items-center gap-2">
                           <Clock className="w-4 h-4" />
                           <span>{currentLesson.duration} minutes</span>
                         </div>
                       </div>
+
                       {currentLesson.content && (
                         <div className="pt-4 pb-2 border-t">
                           <div className="prose prose-sm md:prose-base dark:prose-invert max-w-none break-words">
@@ -336,6 +299,7 @@ export default function CourseDetailPage({ params: paramsPromise }: { params: Pr
                           </div>
                         </div>
                       )}
+
                       {/* Per-Lesson Assignment Card */}
                       {currentLesson.assignments && currentLesson.assignments.length > 0 && (
                         <div className="pt-4 border-t">
@@ -363,6 +327,7 @@ export default function CourseDetailPage({ params: paramsPromise }: { params: Pr
                           </div>
                         </div>
                       )}
+
                       <div className="pt-4 border-t space-y-3">
                         <p className="text-sm text-muted-foreground">
                           This is lesson {selectedLesson + 1} of {course.lessons.length}
@@ -390,163 +355,153 @@ export default function CourseDetailPage({ params: paramsPromise }: { params: Pr
                   </Card>
                 )}
               </div>
-
-              {/* Lessons List */}
-              <div className="space-y-2">
-                <h3 className="font-semibold text-lg">Lessons</h3>
-                <div className="space-y-2">
-                  {course.lessons.map((lesson, index) => {
-                    const isWatched = watchedLessons.has(lesson.id);
-                    return (
-                      <Card
-                        key={lesson.id}
-                        className={`p-4 cursor-pointer transition-colors ${
-                          selectedLesson === index
-                            ? 'border-primary bg-primary/5'
-                            : 'hover:border-primary/50'
-                        }`}
-                        onClick={() => setSelectedLesson(index)}
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs text-muted-foreground mb-1">
-                              Lesson {index + 1}
-                            </p>
-                            <p className="font-medium text-sm line-clamp-2">
-                              {lesson.title}
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {lesson.duration}m
-                            </p>
-                          </div>
-                          {isWatched && (
-                            <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0 mt-1" />
-                          )}
-                        </div>
-                      </Card>
-                    );
-                  })}
-                </div>
-              </div>
             </div>
           </TabsContent>
 
-          {/* Live Session Tab */}
+          {/* Live Sessions Tab */}
           <TabsContent value="live" className="space-y-6">
-            <Card className="p-8 space-y-4">
-              {course.liveSession ? (
-                <>
-                  <div className="flex items-start gap-4">
-                    <Zap className="w-8 h-8 text-accent shrink-0 mt-1" />
-                    <div className="flex-1 space-y-3">
-                      <h2 className="text-2xl font-bold">
-                        {course.liveSession.title}
-                      </h2>
-                      <p className="text-muted-foreground">
-                        {course.liveSession.description}
-                      </p>
-                      <div className="space-y-2">
-                        <p className="text-sm">
-                          <span className="font-medium">Instructor:</span>{' '}
-                          {course.liveSession.instructor}
-                        </p>
-                        <p className="text-sm">
-                          <span className="font-medium">Scheduled:</span>{' '}
-                          {new Date(
-                            course.liveSession.scheduledTime
-                          ).toLocaleString()}
-                        </p>
-                      </div>
-                      <div className="flex flex-col sm:flex-row gap-3">
-                        <Button className="flex-1 sm:flex-none">
-                          Join Live Session
-                        </Button>
-                        {!attendedLive ? (
-                          <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-                            <DialogTrigger asChild>
-                              <Button variant="secondary" className="gap-2">
-                                <QrCode className="w-4 h-4" />
-                                Mark Attendance
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent className="sm:max-w-md">
-                              <DialogHeader>
-                                <DialogTitle>Mark Attendance</DialogTitle>
-                              </DialogHeader>
-                              <Tabs defaultValue="qr" className="w-full">
-                                <TabsList className="grid w-full grid-cols-2">
-                                  <TabsTrigger value="qr">Scan QR</TabsTrigger>
-                                  <TabsTrigger value="code">Enter Code</TabsTrigger>
-                                </TabsList>
-                                <TabsContent value="qr" className="space-y-4 pt-4">
-                                  <div className="flex flex-col items-center gap-4 text-center">
-                                    <p className="text-sm text-muted-foreground">
-                                      Scan the QR code shown during the live session
-                                    </p>
-                                    <QRScanner onScan={(text) => handleLiveAttendance(text)} />
-                                  </div>
-                                </TabsContent>
-                                <TabsContent value="code" className="space-y-6 pt-4">
-                                  <div className="flex flex-col items-center gap-6 text-center">
-                                    <div className="space-y-2">
-                                      <p className="text-sm font-medium">Session Code</p>
-                                      <p className="text-sm text-muted-foreground">
-                                        Enter the 6-digit code provided by your instructor
-                                      </p>
-                                    </div>
-                                    <div className="flex flex-col items-center gap-4">
-                                      <InputOTP 
-                                        maxLength={6} 
-                                        value={otpValue} 
-                                        onChange={setOtpValue}
-                                        onComplete={(v) => handleLiveAttendance(v)}
-                                      >
-                                        <InputOTPGroup>
-                                          <InputOTPSlot index={0} />
-                                          <InputOTPSlot index={1} />
-                                          <InputOTPSlot index={2} />
-                                          <InputOTPSlot index={3} />
-                                          <InputOTPSlot index={4} />
-                                          <InputOTPSlot index={5} />
-                                        </InputOTPGroup>
-                                      </InputOTP>
-                                      <Button 
-                                        className="w-full gap-2" 
-                                        onClick={() => handleLiveAttendance(otpValue)}
-                                        disabled={otpValue.length !== 6}
-                                      >
-                                        <KeyRound className="w-4 h-4" />
-                                        Submit Code
-                                      </Button>
-                                    </div>
-                                  </div>
-                                </TabsContent>
-                              </Tabs>
-                            </DialogContent>
-                          </Dialog>
-                        ) : (
-                          <div className="flex items-center gap-2 text-sm text-green-600 font-medium px-4 py-2 bg-green-50 rounded-md border border-green-200">
-                            <CheckCircle2 className="w-4 h-4" />
-                            <span>Attendance Marked</span>
+            <div className="space-y-4">
+              {course.liveSessions && course.liveSessions.length > 0 ? (
+                course.liveSessions.map((session: any) => {
+                  const hasAttended = attendedLiveSessions.has(session.id);
+                  const isFutureSession = false; // new Date(session.date).getTime() > Date.now();
+
+                  return (
+                    <Card key={session.id} className={`p-6 space-y-4 transition-colors ${hasAttended ? 'border-green-200 bg-green-50/30 dark:border-green-800 dark:bg-green-950/20' : ''} ${isFutureSession ? 'opacity-75 bg-muted/20' : ''}`}>
+                      <div className="flex items-start gap-4">
+                        <Zap className={`w-8 h-8 shrink-0 mt-1 ${hasAttended ? 'text-green-500' : isFutureSession ? 'text-muted-foreground/50' : 'text-accent'}`} />
+                        <div className="flex-1 space-y-3">
+                          <div className="flex justify-between items-start">
+                            <h2 className="text-xl font-bold">
+                              {session.title}
+                            </h2>
+                            {hasAttended ? (
+                              <div className="flex items-center gap-2 text-sm text-green-600 font-medium px-3 py-1 bg-green-100 dark:bg-green-900/40 rounded-full border border-green-200 dark:border-green-800">
+                                <CheckCircle className="w-4 h-4" />
+                                <span>Attended</span>
+                              </div>
+                            ) : isFutureSession ? (
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium px-3 py-1 bg-muted rounded-full border">
+                                <Calendar className="w-4 h-4" />
+                                <span>Upcoming</span>
+                              </div>
+                            ) : null}
                           </div>
-                        )}
+
+                          <p className="text-muted-foreground">
+                            {session.description}
+                          </p>
+                          <div className="space-y-2">
+                            <p className="text-sm">
+                              <span className="font-medium">Instructor:</span>{' '}
+                              {session.instructor}
+                            </p>
+                            <p className="text-sm">
+                              <span className="font-medium">Scheduled:</span>{' '}
+                              {new Date(session.date).toLocaleString('en-GB', {
+                                weekday: 'long',
+                                day: 'numeric',
+                                month: 'long',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </p>
+                          </div>
+
+                          <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                            <Button className="flex-1 sm:flex-none" disabled={isFutureSession}>
+                              Join Live Session
+                            </Button>
+                            {!hasAttended && (
+                              <Button
+                                variant={isFutureSession ? "outline" : "secondary"}
+                                className="gap-2"
+                                onClick={() => openAttendanceModal(session.id)}
+                                disabled={isFutureSession}
+                              >
+                                <QrCode className="w-4 h-4" />
+                                {isFutureSession ? 'Available Soon' : 'Mark Attendance'}
+                              </Button>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                </>
+                    </Card>
+                  );
+                })
               ) : (
-                <p className="text-muted-foreground text-center py-8">
+                <p className="text-muted-foreground text-center py-12">
                   No live sessions scheduled yet
                 </p>
               )}
-            </Card>
+            </div>
+
+            {/* Global Modal for Attendance */}
+            <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Mark Attendance</DialogTitle>
+                </DialogHeader>
+                <Tabs defaultValue="qr" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="qr">Scan QR</TabsTrigger>
+                    <TabsTrigger value="code">Enter Code</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="qr" className="space-y-4 pt-4">
+                    <div className="flex flex-col items-center gap-4 text-center">
+                      <p className="text-sm text-muted-foreground">
+                        Scan the QR code shown during the live session
+                      </p>
+                      <QRScanner onScan={(text) => handleLiveAttendance(text)} />
+                    </div>
+                  </TabsContent>
+                  <TabsContent value="code" className="space-y-6 pt-4">
+                    <div className="flex flex-col items-center gap-6 text-center">
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium">Session Code</p>
+                        <p className="text-sm text-muted-foreground">
+                          Enter the 6-digit code provided by your instructor
+                        </p>
+                      </div>
+                      <div className="flex flex-col items-center gap-4">
+                        <InputOTP
+                          maxLength={6}
+                          value={otpValue}
+                          onChange={setOtpValue}
+                          onComplete={(v) => handleLiveAttendance(v)}
+                          disabled={submittingLive}
+                        >
+                          <InputOTPGroup>
+                            <InputOTPSlot index={0} />
+                            <InputOTPSlot index={1} />
+                            <InputOTPSlot index={2} />
+                            <InputOTPSlot index={3} />
+                            <InputOTPSlot index={4} />
+                            <InputOTPSlot index={5} />
+                          </InputOTPGroup>
+                        </InputOTP>
+                        <Button
+                          className="w-full gap-2"
+                          onClick={() => handleLiveAttendance(otpValue)}
+                          disabled={otpValue.length !== 6 || submittingLive}
+                        >
+                          <KeyRound className="w-4 h-4" />
+                          {submittingLive ? 'Verifying...' : 'Submit Code'}
+                        </Button>
+                      </div>
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </DialogContent>
+            </Dialog>
           </TabsContent>
 
           {/* Assignments Tab */}
           <TabsContent value="assignments" className="space-y-6">
             <div className="space-y-4">
               {course.assignments && course.assignments.length > 0 ? (
-                course.assignments.map((assignment) => (
+                course.assignments.map((assignment: any) => (
                   <Card key={assignment.id} className="p-6 space-y-4">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 space-y-2">
@@ -578,58 +533,6 @@ export default function CourseDetailPage({ params: paramsPromise }: { params: Pr
             </div>
           </TabsContent>
 
-          {/* Quiz Tab */}
-          <TabsContent value="quiz" className="space-y-6">
-            {course.quiz ? (
-              <Card className="p-8 space-y-6">
-                <div>
-                  <h2 className="text-2xl font-bold mb-2">{course.quiz.title}</h2>
-                  <p className="text-muted-foreground">
-                    {course.quiz.questions.length} questions • Passing score:{' '}
-                    {course.quiz.passingScore}%
-                  </p>
-                </div>
-                <Button
-                  size="lg"
-                  onClick={() => router.push(`/quiz/${course.quiz.id}`)}
-                >
-                  Take Quiz
-                </Button>
-              </Card>
-            ) : (
-              <Card className="p-12 text-center text-muted-foreground border-dashed">
-                No quiz available for this course yet.
-              </Card>
-            )}
-          </TabsContent>
-
-          {/* Exam Tab */}
-          <TabsContent value="exam" className="space-y-6">
-            {course.exam ? (
-              <Card className="p-8 space-y-6">
-                <div>
-                  <h2 className="text-2xl font-bold mb-2">{course.exam.title}</h2>
-                  <p className="text-muted-foreground">
-                    {course.exam.questions.length} questions • {course.exam.duration}{' '}
-                    minutes • Passing score: {course.exam.passingScore}%
-                  </p>
-                </div>
-                <Button
-                  size="lg"
-                  onClick={() => router.push(`/exam/${course.exam.id}`)}
-                  disabled={watchedLessons.size < course.lessons.length}
-                >
-                  {watchedLessons.size < course.lessons.length
-                    ? 'Complete all lessons first'
-                    : 'Take Exam'}
-                </Button>
-              </Card>
-            ) : (
-              <Card className="p-12 text-center text-muted-foreground border-dashed">
-                No exam available for this course yet.
-              </Card>
-            )}
-          </TabsContent>
         </Tabs>
       </div>
     </DashboardLayout>

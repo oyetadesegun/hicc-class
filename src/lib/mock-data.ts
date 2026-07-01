@@ -22,6 +22,7 @@ export interface Course {
   level?: string;
   lessons: Lesson[];
   liveSession?: LiveSession;
+  liveSessions?: LiveSession[];
   assignments: Assignment[];
   quiz: Quiz;
   exam: Exam;

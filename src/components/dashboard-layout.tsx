@@ -53,9 +53,9 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <div className="flex">
+      <div className="flex min-h-[calc(100vh-73px)]">
         {/* Sidebar */}
-        <aside className="hidden md:flex w-64 border-r bg-muted/30 flex-col">
+        <aside className="hidden md:flex w-64 shrink-0 border-r bg-muted/30 flex-col sticky top-[73px] h-[calc(100vh-73px)] overflow-y-auto">
           <nav className="flex-1 p-4 space-y-2">
             {items.map((item) => (
               <Link key={item.href} href={item.href}>
@@ -74,7 +74,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full min-w-0">
           {children}
         </main>
       </div>

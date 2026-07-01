@@ -1,10 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { DashboardLayout } from '@/components/dashboard-layout';
+import { LoadingScreen } from '@/components/loading-screen';
 import { vignan } from '@/lib/vignan-client';
-import { autoMarkAttendance } from '@/lib/actions/attendance';
+import { Course } from '@/lib/mock-data';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -33,40 +36,43 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { 
-  Download, 
-  Search, 
-  Users, 
+import {
+  Download,
+  Search,
+  Users,
   Calendar,
   BookOpen,
   CheckCircle,
   XCircle,
-  Zap,
   KeyRound,
-  Loader2
+  Loader2,
+  Copy,
+  Zap,
+  QrCode,
+  Edit,
+  Save,
+  X
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { DashboardLayout } from '@/components/dashboard-layout';
-import { LoadingScreen } from '@/components/loading-screen';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Copy, PlusCircle } from 'lucide-react';
+import { autoMarkAttendance } from '@/lib/actions/courses';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { generateSessionCode } from '@/lib/actions/attendance';
 
-export default function AttendanceReportPage() {
+export default function AdminAttendancePage() {
   const { user, loading } = useAuth();
   const router = useRouter();
+
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [selectedCourseId, setSelectedCourseId] = useState<string>('');
   const [records, setRecords] = useState<any[]>([]);
-  const [courses, setCourses] = useState<any[]>([]);
+  const [enrolledUsers, setEnrolledUsers] = useState<any[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
   const [isDataLoading, setIsDataLoading] = useState(true);
   const [isMarking, setIsMarking] = useState(false);
-  const [selectedCourseId, setSelectedCourseId] = useState<string>('');
-  const [enrolledUsers, setEnrolledUsers] = useState<any[]>([]);
   const [updatingCells, setUpdatingCells] = useState<Set<string>>(new Set());
-  const [searchTerm, setSearchTerm] = useState('');
+
+  // Track regenerating a code so we show a loader
+  const [generatingCodeFor, setGeneratingCodeFor] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading && (!user || user.role !== 'ADMIN')) {
@@ -83,14 +89,13 @@ export default function AttendanceReportPage() {
       ]);
       setRecords(attendanceData || []);
       setCourses(courseList || []);
-      
-      // Set first course as default
-      if (courseList && courseList.length > 0) {
+
+      if (courseList && courseList.length > 0 && !selectedCourseId) {
         setSelectedCourseId(courseList[0].id);
       }
     } catch (error) {
-      console.error('Data fetch error:', error);
-      toast.error('Failed to fetch attendance records');
+      console.error('Failed to fetch attendance data:', error);
+      toast.error('Failed to load attendance data');
     } finally {
       setIsDataLoading(false);
     }
@@ -105,7 +110,7 @@ export default function AttendanceReportPage() {
   useEffect(() => {
     if (selectedCourseId) {
       vignan.entities.Course.getEnrolledUsers(selectedCourseId)
-        .then(setEnrolledUsers)
+        .then(students => setEnrolledUsers(students))
         .catch(err => {
           console.error('Error fetching enrolled users:', err);
           setEnrolledUsers([]);
@@ -114,12 +119,11 @@ export default function AttendanceReportPage() {
   }, [selectedCourseId]);
 
   const handleAutoMarkAttendance = async (courseId?: string) => {
+    if (!courseId) return;
     try {
       setIsMarking(true);
       const result = await autoMarkAttendance(courseId);
       toast.success(`Auto-marked ${result.totalMarked} attendance records!`);
-      
-      // Refresh the data
       await fetchData();
     } catch (error) {
       console.error('Auto-mark error:', error);
@@ -129,11 +133,11 @@ export default function AttendanceReportPage() {
     }
   };
 
-  const handleToggleAttendance = async (lessonId: string, userId: string, currentStatus: boolean) => {
-    const cellKey = `${userId}-${lessonId}`;
+  const handleToggleLiveAttendance = async (liveSessionId: string, userId: string, currentStatus: boolean) => {
+    const cellKey = `${userId}-${liveSessionId}`;
     try {
       setUpdatingCells(prev => new Set(prev).add(cellKey));
-      await vignan.entities.Course.toggleAttendance(selectedCourseId, lessonId, userId, !currentStatus);
+      await vignan.entities.Course.toggleLiveAttendance(selectedCourseId, liveSessionId, userId, !currentStatus);
       toast.success(`Attendance updated`);
       await fetchData();
     } catch (error) {
@@ -148,11 +152,11 @@ export default function AttendanceReportPage() {
     }
   };
 
-  const handleBulkAttendance = async (lessonId: string, isPresent: boolean) => {
+  const handleBulkLiveAttendance = async (liveSessionId: string, isPresent: boolean) => {
     try {
       setIsMarking(true);
       const userIds = allStudentsForCourse.map(u => u.id);
-      await vignan.entities.Course.bulkToggleAttendance(selectedCourseId, lessonId, userIds, isPresent);
+      await vignan.entities.Course.bulkToggleLiveAttendance(selectedCourseId, liveSessionId, userIds, isPresent);
       toast.success(`Bulk updated ${userIds.length} students`);
       await fetchData();
     } catch (error) {
@@ -163,48 +167,98 @@ export default function AttendanceReportPage() {
     }
   };
 
+  const handleGenerateCode = async (sessionId: string) => {
+    try {
+      setGeneratingCodeFor(sessionId);
+      const res = await generateSessionCode(sessionId);
+      if (res.success) {
+        toast.success(`New code generated: ${res.code}`);
+        
+        // Optimistically update the UI to instantly show the new code without waiting for network
+        setCourses(prev => prev.map(course => ({
+          ...course,
+          liveSessions: (course.liveSessions || []).map(session => 
+            session.id === sessionId 
+              ? { ...session, secretCode: res.code || '', codeGeneratedAt: new Date().toISOString() } as any
+              : session
+          )
+        })));
+        
+        await fetchData(); // refresh to show the new code
+      } else {
+        toast.error(res.error || 'Failed to generate code');
+      }
+    } catch (error) {
+      toast.error('An unexpected error occurred');
+    } finally {
+      setGeneratingCodeFor(null);
+    }
+  };
+
+  const [editingDateFor, setEditingDateFor] = useState<string | null>(null);
+  const [tempDate, setTempDate] = useState<string>('');
+  const [tempTitle, setTempTitle] = useState<string>('');
+
+  const handleUpdateSessionDate = async (sessionId: string) => {
+    try {
+      if (!tempDate || !tempTitle) return;
+      await vignan.entities.Course.updateLiveSession(sessionId, { date: tempDate, title: tempTitle });
+      toast.success('Session updated successfully');
+      setEditingDateFor(null);
+      await fetchData();
+    } catch (error) {
+      console.error('Failed to update session date:', error);
+      toast.error('Failed to update date');
+    }
+  };
+
   // Get records for selected course
   const courseRecords = records.filter(r => r.courseId === selectedCourseId);
   const selectedCourse = courses.find(c => c.id === selectedCourseId);
 
-  // Group records by lesson for easy lookup
-  const lessonRecordMap = new Map<string, any[]>();
+  // Group records by LIVE SESSION for easy lookup
+  const liveSessionRecordMap = new Map<string, any[]>();
   courseRecords.forEach(record => {
-    const lessonId = record.lessonId;
-    if (!lessonRecordMap.has(lessonId)) {
-      lessonRecordMap.set(lessonId, []);
-    }
-    lessonRecordMap.get(lessonId)!.push(record);
-  });
-
-  // Combined student list (enrolled + any who might have attendance record but not in enrollment list)
-  const allStudentsForCourse = [...enrolledUsers];
-  
-  // Add students who have records but aren't in enrolledUsers (just in case)
-  courseRecords.forEach(record => {
-    if (!allStudentsForCourse.find(s => s.id === record.userId)) {
-      allStudentsForCourse.push(record.user);
+    if (record.liveSessionId) {
+      if (!liveSessionRecordMap.has(record.liveSessionId)) {
+        liveSessionRecordMap.set(record.liveSessionId, []);
+      }
+      liveSessionRecordMap.get(record.liveSessionId)!.push(record);
     }
   });
 
-  const filteredLessons = (selectedCourse?.lessons || []).filter((lesson: any) =>
-    lesson.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (lessonRecordMap.get(lesson.id) || []).some(r => 
-      (r.user?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (r.user?.email || '').toLowerCase().includes(searchTerm.toLowerCase())
-    )
-  );
+  // Combined student list
+  const allStudentsMap = new Map();
+  enrolledUsers.forEach(s => {
+    if (s && s.id) allStudentsMap.set(s.id, s);
+  });
+  courseRecords.forEach(record => {
+    if (record.user && record.user.id && !allStudentsMap.has(record.userId)) {
+      allStudentsMap.set(record.userId, record.user);
+    }
+  });
+  const allStudentsForCourse = Array.from(allStudentsMap.values());
+
+  const filteredSessions = [...(selectedCourse?.liveSessions || [])]
+    .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    .filter((session: any) =>
+      session.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (liveSessionRecordMap.get(session.id) || []).some(r =>
+        (r.user?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (r.user?.email || '').toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    );
 
   const exportToCSV = () => {
-    const headers = ['Lesson', 'Student Name', 'Email', 'Status', 'Attended At'];
+    const headers = ['Class Day', 'Student Name', 'Email', 'Status', 'Attended At'];
     const rows: any[] = [];
 
-    filteredLessons.forEach((lesson: any) => {
-      const lessonRecords = lessonRecordMap.get(lesson.id) || [];
+    filteredSessions.forEach((session: any) => {
+      const sessionRecords = liveSessionRecordMap.get(session.id) || [];
       allStudentsForCourse.forEach(student => {
-        const record = lessonRecords.find(r => r.userId === student.id);
+        const record = sessionRecords.find(r => r.userId === student.id);
         rows.push([
-          `Lesson ${lesson.order}: ${lesson.title}`,
+          `Day: ${session.title}`,
           student?.name || 'Unknown',
           student?.email || 'Unknown',
           record ? 'Present' : 'Absent',
@@ -243,12 +297,12 @@ export default function AttendanceReportPage() {
       <div className="space-y-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight font-outfit">Attendance By Course</h1>
-            <p className="text-muted-foreground">Monitor student attendance per lesson in each course.</p>
+            <h1 className="text-3xl font-bold tracking-tight font-outfit">Daily Class Attendance</h1>
+            <p className="text-muted-foreground">Monitor student attendance for each daily session.</p>
           </div>
           <div className="flex gap-2">
-            <Button 
-              onClick={() => handleAutoMarkAttendance(selectedCourseId)} 
+            <Button
+              onClick={() => handleAutoMarkAttendance(selectedCourseId)}
               className="gap-2"
               disabled={!selectedCourseId || isMarking}
               variant="outline"
@@ -290,12 +344,12 @@ export default function AttendanceReportPage() {
             <Card className="bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <BookOpen className="w-4 h-4" />
-                  Lessons
+                  <Calendar className="w-4 h-4" />
+                  Class Days
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{filteredLessons.length}</div>
+                <div className="text-2xl font-bold">{filteredSessions.length}</div>
               </CardContent>
             </Card>
             <Card className="bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-900">
@@ -307,8 +361,8 @@ export default function AttendanceReportPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {enrolledUsers.length > 0 && filteredLessons.length > 0 
-                    ? Math.round((courseRecords.length / (enrolledUsers.length * filteredLessons.length)) * 100)
+                  {enrolledUsers.length > 0 && filteredSessions.length > 0
+                    ? Math.round((courseRecords.length / (enrolledUsers.length * filteredSessions.length)) * 100)
                     : 0}%
                 </div>
               </CardContent>
@@ -327,15 +381,13 @@ export default function AttendanceReportPage() {
             <Card className="bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-900">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <Calendar className="w-4 h-4" />
-                  Last Entry
+                  <CheckCircle className="w-4 h-4" />
+                  Total Present Check-ins
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-sm font-bold">
-                  {courseRecords.length > 0 && courseRecords[0].attendedAt
-                    ? new Date(courseRecords[0].attendedAt).toLocaleDateString()
-                    : 'No data'}
+                <div className="text-2xl font-bold">
+                  {courseRecords.length}
                 </div>
               </CardContent>
             </Card>
@@ -349,7 +401,7 @@ export default function AttendanceReportPage() {
               <div className="relative w-full max-w-sm">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search students or lessons..."
+                  placeholder="Search students or class days..."
                   className="pl-10"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -366,8 +418,8 @@ export default function AttendanceReportPage() {
               <CardHeader className="pb-3 border-b bg-muted/30">
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle className="text-xl">Attendance Matrix</CardTitle>
-                    <CardDescription>Comparative view of student attendance across all lessons.</CardDescription>
+                    <CardTitle className="text-xl">Daily Attendance Matrix</CardTitle>
+                    <CardDescription>Comparative view of student attendance across all class days.</CardDescription>
                   </div>
                   <div className="flex items-center gap-4 text-sm">
                     <div className="flex items-center gap-1.5">
@@ -386,40 +438,128 @@ export default function AttendanceReportPage() {
                   <Table>
                     <TableHeader className="bg-muted/50">
                       <TableRow>
-                        <TableHead className="min-w-[180px] font-bold sticky left-0 bg-muted/90 z-10 border-r">Student</TableHead>
-                        {filteredLessons.map((lesson: any) => {
-                          const lessonRecords = lessonRecordMap.get(lesson.id) || [];
-                          const lessonPercentage = enrolledUsers.length > 0 ? Math.round((lessonRecords.length / enrolledUsers.length) * 100) : 0;
+                        <TableHead className="min-w-[120px] max-w-[120px] md:min-w-[180px] md:max-w-[180px] font-bold sticky left-0 bg-muted/90 z-20 border-r shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] px-2 md:px-4">Student</TableHead>
+                        {filteredSessions.map((session: any, index: number) => {
+                          const sessionRecords = liveSessionRecordMap.get(session.id) || [];
+                          const sessionPercentage = enrolledUsers.length > 0 ? Math.round((sessionRecords.length / enrolledUsers.length) * 100) : 0;
+
+                          // Determine dynamic QR URL
+                          const qrUrl = typeof window !== 'undefined' ? `${window.location.origin}/attend?s=${session.id}&c=${session.secretCode || ''}` : '';
+
                           return (
-                            <TableHead key={lesson.id} className="text-center min-w-[80px] py-4">
+                            <TableHead key={session.id} className="text-center min-w-[80px] md:min-w-[100px] py-2 md:py-4 px-1 md:px-4">
                               <div className="flex flex-col items-center gap-1">
-                                <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold">L{lesson.order}</span>
+                                <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold truncate max-w-[80px]" title={session.title}>
+                                  Day {index + 1}
+                                </span>
+                                <span className="text-[9px] text-muted-foreground">
+                                  {new Date(session.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                </span>
                                 <Popover>
                                   <PopoverTrigger asChild>
-                                    <Button variant="ghost" size="sm" className="h-auto p-1 hover:bg-primary/10">
-                                      <KeyRound className="w-4 h-4 text-primary" />
+                                    <Button variant="ghost" size="sm" className="h-auto p-1 hover:bg-primary/10" title="Manage Code & Attendance">
+                                      <QrCode className={`w-4 h-4 ${session.secretCode ? 'text-primary' : 'text-muted-foreground'}`} />
                                     </Button>
                                   </PopoverTrigger>
-                                  <PopoverContent className="w-64">
+                                  <PopoverContent className="w-80">
                                     <div className="space-y-3">
-                                      <div className="font-semibold text-sm">{lesson.title}</div>
-                                      <div className="text-xs text-muted-foreground underline decoration-dotted">Session Details:</div>
-                                      <div className="flex justify-between text-[11px]">
-                                        <span>Attendance:</span>
-                                        <span className="font-bold">{lessonRecords.length} / {enrolledUsers.length}</span>
+                                      <div className="font-semibold text-sm flex justify-between items-center">
+                                        <span>{session.title}</span>
+                                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => { 
+                                          setEditingDateFor(session.id); 
+                                          setTempDate(new Date(session.date).toISOString().slice(0, 16)); 
+                                          setTempTitle(session.title);
+                                        }}>
+                                          <Edit className="w-3 h-3 text-muted-foreground hover:text-primary" />
+                                        </Button>
                                       </div>
-                                      <div className="flex justify-between text-[11px]">
-                                        <span>Percentage:</span>
-                                        <span className="font-bold">{lessonPercentage}%</span>
+                                      {editingDateFor === session.id ? (
+                                        <div className="flex flex-col gap-2 bg-muted/50 p-2 rounded">
+                                          <Input 
+                                            size="sm"
+                                            className="h-7 text-xs w-full font-semibold"
+                                            value={tempTitle}
+                                            onChange={(e) => setTempTitle(e.target.value)}
+                                            placeholder="Session Title"
+                                          />
+                                          <div className="flex items-center gap-1">
+                                            <Input 
+                                              type="datetime-local" 
+                                              size="sm" 
+                                              className="h-7 text-xs w-full" 
+                                              value={tempDate} 
+                                              onChange={(e) => setTempDate(e.target.value)} 
+                                            />
+                                            <Button size="sm" className="h-7 w-7 p-0 shrink-0" onClick={() => handleUpdateSessionDate(session.id)}>
+                                              <Save className="w-3 h-3" />
+                                            </Button>
+                                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 shrink-0 text-destructive hover:bg-destructive/10" onClick={() => setEditingDateFor(null)}>
+                                              <X className="w-3 h-3" />
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <div className="text-xs text-muted-foreground">{new Date(session.date).toLocaleString()} • {session.duration}</div>
+                                      )}
+
+                                      {/* Code Generation Section */}
+                                      <div className="p-3 bg-muted/30 rounded-lg border">
+                                        <div className="flex items-center justify-between mb-2">
+                                          <span className="text-xs font-bold uppercase tracking-wider">Attendance Code</span>
+                                          <Button
+                                            size="sm"
+                                            variant="secondary"
+                                            className="h-7 text-[10px]"
+                                            onClick={() => handleGenerateCode(session.id)}
+                                            disabled={generatingCodeFor === session.id}
+                                          >
+                                            {generatingCodeFor === session.id ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Generate New'}
+                                          </Button>
+                                        </div>
+
+                                        {session.secretCode ? (
+                                          <div className="space-y-3">
+                                            <div className="flex flex-col items-center gap-1">
+                                              <div className="text-3xl font-mono font-bold tracking-widest text-primary py-2">
+                                                {session.secretCode}
+                                              </div>
+                                              {session.codeGeneratedAt && (
+                                                <div className="text-[10px] text-muted-foreground">
+                                                  Generated: {new Date(session.codeGeneratedAt).toLocaleTimeString()} (Expires in 15m)
+                                                </div>
+                                              )}
+                                            </div>
+
+                                            <div className="flex justify-center border-t pt-3">
+                                              <img
+                                                src={`/api/qr?s=${session.id}&c=${session.secretCode}`}
+                                                alt="QR Code"
+                                                className="w-32 h-32 rounded shadow-sm border p-1 bg-white"
+                                              />
+                                            </div>
+                                            <div className="text-[10px] text-center text-muted-foreground">
+                                              Students can scan this QR code or manually enter the 6-digit code.
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <div className="text-sm italic text-muted-foreground text-center py-4">
+                                            No active code. Click "Generate New" to start taking attendance.
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      <div className="flex justify-between text-[11px] pt-2 border-t">
+                                        <span>Present:</span>
+                                        <span className="font-bold">{sessionRecords.length} / {enrolledUsers.length}</span>
                                       </div>
 
                                       <div className="pt-2 border-t mt-2">
                                         <div className="text-[10px] font-bold text-muted-foreground uppercase mb-2">Bulk Actions</div>
                                         <div className="grid grid-cols-2 gap-2">
-                                          <Button 
-                                            size="sm" 
+                                          <Button
+                                            size="sm"
                                             className="h-8 text-[10px] bg-green-600 hover:bg-green-700"
-                                            onClick={() => handleBulkAttendance(lesson.id, true)}
+                                            onClick={() => handleBulkLiveAttendance(session.id, true)}
                                             disabled={isMarking}
                                           >
                                             Mark All Present
@@ -427,9 +567,9 @@ export default function AttendanceReportPage() {
 
                                           <AlertDialog>
                                             <AlertDialogTrigger asChild>
-                                              <Button 
-                                                variant="outline" 
-                                                size="sm" 
+                                              <Button
+                                                variant="outline"
+                                                size="sm"
                                                 className="h-8 text-[10px] text-destructive hover:bg-destructive/10"
                                                 disabled={isMarking}
                                               >
@@ -440,14 +580,14 @@ export default function AttendanceReportPage() {
                                               <AlertDialogHeader>
                                                 <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                                                 <AlertDialogDescription>
-                                                  This will mark **all students** as absent for "{lesson.title}". This action cannot be easily undone.
+                                                  This will mark **all students** as absent for "{session.title}". This action cannot be easily undone.
                                                 </AlertDialogDescription>
                                               </AlertDialogHeader>
                                               <AlertDialogFooter>
                                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                <AlertDialogAction 
+                                                <AlertDialogAction
                                                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                                  onClick={() => handleBulkAttendance(lesson.id, false)}
+                                                  onClick={() => handleBulkLiveAttendance(session.id, false)}
                                                 >
                                                   Confirm Mark All Absent
                                                 </AlertDialogAction>
@@ -456,41 +596,11 @@ export default function AttendanceReportPage() {
                                           </AlertDialog>
                                         </div>
                                       </div>
-
-                                      <div className="text-xs text-muted-foreground mt-2">Attendance Code:</div>
-                                      {lesson.liveSession?.secretCode ? (
-                                        <div className="flex items-center gap-2 p-2 bg-muted rounded font-mono text-center justify-center text-lg font-bold">
-                                          {lesson.liveSession.secretCode}
-                                          <Button 
-                                            variant="ghost" 
-                                            size="icon" 
-                                            className="h-6 w-6" 
-                                            onClick={() => {
-                                              navigator.clipboard.writeText(lesson.liveSession.secretCode);
-                                              toast.success('Code copied!');
-                                            }}
-                                          >
-                                            <Copy className="h-3 w-3" />
-                                          </Button>
-                                        </div>
-                                      ) : (
-                                        <div className="text-xs italic text-destructive text-center py-2 border border-dashed rounded bg-destructive/5">
-                                          No active session/code.
-                                          <Button 
-                                            variant="link" 
-                                            size="sm" 
-                                            className="mt-1 h-auto py-0"
-                                            onClick={() => router.push('/admin')}
-                                          >
-                                            Go to Sessions
-                                          </Button>
-                                        </div>
-                                      )}
                                     </div>
                                   </PopoverContent>
                                 </Popover>
-                                <span className={`text-[10px] font-bold ${lessonPercentage >= 75 ? "text-green-600" : lessonPercentage >= 50 ? "text-orange-500" : "text-destructive"}`}>
-                                  {lessonPercentage}%
+                                <span className={`text-[10px] font-bold ${sessionPercentage >= 75 ? "text-green-600" : sessionPercentage >= 50 ? "text-orange-500" : "text-destructive"}`}>
+                                  {sessionPercentage}%
                                 </span>
                               </div>
                             </TableHead>
@@ -501,36 +611,37 @@ export default function AttendanceReportPage() {
                     </TableHeader>
                     <TableBody>
                       {allStudentsForCourse
-                        .filter(student => 
+                        .filter(student =>
                           (student?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                           (student?.email || '').toLowerCase().includes(searchTerm.toLowerCase())
                         )
                         .map((student) => {
                           const studentRecords = courseRecords.filter(r => r.userId === student.id);
-                          const presentCount = studentRecords.length;
-                          const totalLessons = filteredLessons.length;
-                          const percentage = totalLessons > 0 ? Math.round((presentCount / totalLessons) * 100) : 0;
+                          // For student percentage, calculate based on past/current live sessions, but for simplicity we show against total sessions
+                          const presentCount = studentRecords.filter(r => r.liveSessionId).length;
+                          const totalSessions = filteredSessions.length;
+                          const percentage = totalSessions > 0 ? Math.round((presentCount / totalSessions) * 100) : 0;
 
                           return (
                             <TableRow key={student.id} className="hover:bg-muted/30">
-                              <TableCell className="font-medium sticky left-0 bg-background z-10 border-r">
+                              <TableCell className="font-medium sticky left-0 bg-background z-10 border-r shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] p-2 md:p-4">
                                 <div className="flex flex-col">
                                   <span>{student?.name || 'Unknown'}</span>
                                   <span className="text-[10px] text-muted-foreground truncate max-w-[150px]">{student?.email}</span>
                                 </div>
                               </TableCell>
-                              {filteredLessons.map((lesson: any) => {
-                                const record = lessonRecordMap.get(lesson.id)?.find(r => r.userId === student.id);
-                                const isUpdating = updatingCells.has(`${student.id}-${lesson.id}`);
-                                
+                              {filteredSessions.map((session: any) => {
+                                const record = liveSessionRecordMap.get(session.id)?.find(r => r.userId === student.id);
+                                const isUpdating = updatingCells.has(`${student.id}-${session.id}`);
+
                                 return (
-                                  <TableCell key={lesson.id} className="text-center">
+                                  <TableCell key={session.id} className="text-center p-1 md:p-4">
                                     <Button
                                       variant="ghost"
                                       size="icon"
                                       className={`h-8 w-8 rounded-full ${isUpdating ? "animate-pulse" : ""}`}
                                       disabled={isUpdating}
-                                      onClick={() => handleToggleAttendance(lesson.id, student.id, !!record)}
+                                      onClick={() => handleToggleLiveAttendance(session.id, student.id, !!record)}
                                     >
                                       {isUpdating ? (
                                         <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
