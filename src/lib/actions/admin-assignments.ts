@@ -1,24 +1,9 @@
 'use server';
 
-import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import prisma from '@/lib/prisma';
-
-const AUTH_COOKIE = 'auth_session';
-
-async function requireAdmin() {
-  const cookieStore = await cookies();
-  const userId = cookieStore.get(AUTH_COOKIE)?.value;
-  if (!userId) throw new Error('Not authenticated');
-
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { id: true, role: true },
-  });
-
-  if (!user || user.role !== 'ADMIN') throw new Error('Unauthorized');
-  return user;
-}
+import { requireAdmin } from '@/lib/auth/session';
+import { signMediaUrl } from '@/lib/imagekit';
 
 export async function getAdminAssignmentReviewData() {
   await requireAdmin();
@@ -107,7 +92,7 @@ export async function getAdminAssignmentReviewData() {
           score: submission?.score ?? null,
           feedback: submission?.feedback ?? '',
           projectUrl: submission?.projectUrl ?? null,
-          attachmentUrl: submission?.attachmentUrl ?? null,
+          attachmentUrl: signMediaUrl(submission?.attachmentUrl),
           attachmentType: submission?.attachmentType ?? null,
           attachmentName: submission?.attachmentName ?? null,
           response,

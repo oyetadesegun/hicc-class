@@ -1,22 +1,31 @@
-const XLSX = require('xlsx');
+const ExcelJS = require('exceljs');
 const path = require('path');
 const fs = require('fs');
 
-const filePath = path.resolve(__dirname, '..', 'public', 'Basic Leadership Course (Responses).xlsx');
-console.log('Target file path:', filePath);
+async function main() {
+  const filePath = path.resolve(__dirname, '..', 'private-imports', 'Basic Leadership Course (Responses).xlsx');
+  console.log('Target file path:', filePath);
 
-if (fs.existsSync(filePath)) {
-  const workbook = XLSX.readFile(filePath);
-  const sheetName = workbook.SheetNames[0];
-  const worksheet = workbook.Sheets[sheetName];
-  const data = XLSX.utils.sheet_to_json(worksheet);
-
-  if (data.length > 0) {
-    console.log('Headers:', Object.keys(data[0]));
-    console.log('First Row Sample:', data[0]);
-  } else {
-    console.log('No data found in the spreadsheet.');
+  if (!fs.existsSync(filePath)) {
+    console.log('File does not exist at:', filePath);
+    return;
   }
-} else {
-  console.log('File does not exist at:', filePath);
+
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.readFile(filePath);
+  const worksheet = workbook.worksheets[0];
+  if (!worksheet) {
+    console.log('No worksheets found.');
+    return;
+  }
+
+  const headers = worksheet.getRow(1).values.slice(1).map(String);
+  const firstDataRow = worksheet.getRow(2).values.slice(1).map(String);
+  console.log('Headers:', headers);
+  console.log('First Row Sample:', Object.fromEntries(headers.map((header, index) => [header, firstDataRow[index] ?? ''])));
 }
+
+main().catch((error) => {
+  console.error('Could not inspect spreadsheet:', error);
+  process.exitCode = 1;
+});

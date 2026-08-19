@@ -36,6 +36,7 @@ export default function AdminCoursesPage() {
     attachmentUrl: '',
     attachmentType: '',
     order: 1,
+    sectionType: 'CORE' as 'CORE' | 'RECORDED',
   });
 
   const [assignmentFormData, setAssignmentFormData] = useState({
@@ -167,7 +168,8 @@ export default function AdminCoursesPage() {
       videoUrl: '',
       attachmentUrl: '',
       attachmentType: '',
-      order: course.lessons.length + 1,
+      order: course.lessons.filter((lesson) => (lesson.sectionType || 'CORE') === 'CORE').length + 1,
+      sectionType: 'CORE',
     });
     setIsLessonModalOpen(true);
   };
@@ -181,6 +183,7 @@ export default function AdminCoursesPage() {
       attachmentUrl: lesson.attachmentUrl || '',
       attachmentType: lesson.attachmentType || '',
       order: lesson.order,
+      sectionType: lesson.sectionType || 'CORE',
     });
   };
 
@@ -203,7 +206,8 @@ export default function AdminCoursesPage() {
         videoUrl: '',
         attachmentUrl: '',
         attachmentType: '',
-        order: (selectedCourse?.lessons.length || 0) + 2,
+        order: (selectedCourse?.lessons.filter((lesson) => (lesson.sectionType || 'CORE') === lessonFormData.sectionType).length || 0) + 1,
+        sectionType: lessonFormData.sectionType,
       });
       fetchCourses();
       // Refresh selected course to show new lesson
@@ -388,8 +392,13 @@ export default function AdminCoursesPage() {
                     <Users className="w-4 h-4 text-secondary" />
                     <span>{course.instructor}</span>
                   </div>
-                  <div className="font-medium text-primary">
-                    {course.lessons.length} Lessons
+                  <div className="font-medium text-primary text-right">
+                    {course.lessons.filter((lesson) => (lesson.sectionType || 'CORE') === 'CORE').length} Lessons
+                    {course.lessons.some((lesson) => lesson.sectionType === 'RECORDED') && (
+                      <span className="block text-xs text-muted-foreground font-normal">
+                        {course.lessons.filter((lesson) => lesson.sectionType === 'RECORDED').length} recorded
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -526,7 +535,7 @@ export default function AdminCoursesPage() {
                     onChange={(e) => setSelectedLessonId(e.target.value)}
                   >
                     <option value="">Select a lesson...</option>
-                    {selectedCourse?.lessons.map((lesson) => (
+                    {selectedCourse?.lessons.filter((lesson) => (lesson.sectionType || 'CORE') === 'CORE').map((lesson) => (
                       <option key={lesson.id} value={lesson.id}>
                         Lesson {lesson.order}: {lesson.title}
                       </option>
@@ -579,7 +588,7 @@ export default function AdminCoursesPage() {
               <div className="space-y-4">
                 <h3 className="font-semibold flex items-center gap-2">
                   <List className="w-4 h-4" /> 
-                  Current Lessons ({selectedCourse?.lessons.length})
+                  Course Content ({selectedCourse?.lessons.length})
                 </h3>
                 <div className="space-y-2">
                     {selectedCourse?.lessons.length === 0 ? (
@@ -595,7 +604,9 @@ export default function AdminCoursesPage() {
                           </div>
                           <div className="min-w-0">
                             <p className="font-medium text-sm truncate">{lesson.title}</p>
-                            <p className="text-xs text-muted-foreground truncate">{lesson.duration} mins • {lesson.videoUrl}</p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {(lesson.sectionType || 'CORE') === 'RECORDED' ? 'Recorded session' : 'Course lesson'} • {lesson.duration} mins
+                            </p>
                           </div>
                         </div>
                         <div className="flex items-center gap-1 justify-end opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity">
@@ -628,7 +639,28 @@ export default function AdminCoursesPage() {
                   {editingLessonId ? <Edit className="w-4 h-4" /> : <Plus className="w-4 h-4" />} 
                   {editingLessonId ? 'Edit Lesson' : 'Add New Lesson'}
                 </h3>
-                <form onSubmit={handleCreateLesson} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <form id="lesson-form" onSubmit={handleCreateLesson} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid gap-2 md:col-span-2">
+                    <Label htmlFor="lesson-section">Content Section</Label>
+                    <select
+                      id="lesson-section"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      value={lessonFormData.sectionType}
+                      onChange={(event) => {
+                        const sectionType = event.target.value as 'CORE' | 'RECORDED';
+                        const sectionLessonCount = selectedCourse?.lessons.filter(
+                          (lesson) => (lesson.sectionType || 'CORE') === sectionType
+                        ).length || 0;
+                        setLessonFormData({ ...lessonFormData, sectionType, order: sectionLessonCount + 1 });
+                      }}
+                    >
+                      <option value="CORE">Course Lessons — required content</option>
+                      <option value="RECORDED">Recorded Live Sessions — additional content</option>
+                    </select>
+                    <p className="text-xs text-muted-foreground">
+                      Recorded live sessions are available to enrolled students but do not affect course completion.
+                    </p>
+                  </div>
                   <div className="grid gap-2 md:col-span-2">
                     <Label htmlFor="lesson-title">Lesson Title</Label>
                     <Input 
@@ -664,7 +696,9 @@ export default function AdminCoursesPage() {
                     <FileUpload 
                       label="Upload Lesson Video"
                       accept="video/*"
-                      folder="lessons/videos"
+                      purpose="lesson-video"
+                      courseId={selectedCourse?.id}
+                      sectionType={lessonFormData.sectionType}
                       onSuccess={(url) => setLessonFormData({...lessonFormData, videoUrl: url})}
                     />
                     {lessonFormData.videoUrl && (
@@ -676,7 +710,8 @@ export default function AdminCoursesPage() {
                     <FileUpload 
                       label="Upload Attachment"
                       accept="*"
-                      folder="lessons/attachments"
+                      purpose="course-material"
+                      maxSize={25}
                       onSuccess={(url, type) => setLessonFormData({
                         ...lessonFormData, 
                         attachmentUrl: url,
@@ -688,10 +723,6 @@ export default function AdminCoursesPage() {
                     )}
                   </div>
                   <div className="md:col-span-2 flex flex-col sm:flex-row gap-2 mt-2">
-                    <Button type="submit" className="flex-1 gap-2">
-                      {editingLessonId ? <Save className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                      {editingLessonId ? 'Update Lesson' : 'Add Lesson to Course'}
-                    </Button>
                     {editingLessonId && (
                       <Button 
                         type="button" 
@@ -705,7 +736,8 @@ export default function AdminCoursesPage() {
                             videoUrl: '',
                             attachmentUrl: '',
                             attachmentType: '',
-                            order: (selectedCourse?.lessons.length || 0) + 1,
+                            order: (selectedCourse?.lessons.filter((lesson) => (lesson.sectionType || 'CORE') === 'CORE').length || 0) + 1,
+                            sectionType: 'CORE',
                           });
                         }}
                       >
@@ -717,9 +749,13 @@ export default function AdminCoursesPage() {
               </div>
             </div>
 
-            <DialogFooter className="p-6 border-t bg-muted/20">
-              <Button variant="secondary" onClick={() => setIsLessonModalOpen(false)}>
-                Finished
+            <DialogFooter className="p-4 border-t bg-background flex-row gap-2">
+              <Button variant="secondary" type="button" onClick={() => setIsLessonModalOpen(false)}>
+                Close
+              </Button>
+              <Button type="submit" form="lesson-form" className="gap-2">
+                {editingLessonId ? <Save className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                {editingLessonId ? 'Update Lesson' : 'Add Lesson to Course'}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -813,7 +849,8 @@ export default function AdminCoursesPage() {
                     <FileUpload 
                       label="Upload Assignment Document"
                       accept="*"
-                      folder="assignments/materials"
+                      purpose="course-material"
+                      maxSize={25}
                       onSuccess={(url, type) => setAssignmentFormData({
                         ...assignmentFormData, 
                         attachmentUrl: url,

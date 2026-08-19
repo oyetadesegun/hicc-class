@@ -101,11 +101,6 @@ export function LoginForm() {
           </a>
         </div>
 
-        {/* <div className="border-t pt-4">
-          <p className="text-xs text-muted-foreground text-center mb-2">Demo credentials:</p>
-          <p className="text-xs text-muted-foreground text-center">Email: john@example.com</p>
-          <p className="text-xs text-muted-foreground text-center">Password: password123</p>
-        </div> */}
       </div>
     </Card>
   );

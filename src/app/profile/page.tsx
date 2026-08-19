@@ -248,6 +248,7 @@ export default function ProfilePage() {
             onSubmit={async (e) => {
               e.preventDefault();
               const formData = new FormData(e.currentTarget);
+              const currentPassword = formData.get('currentPassword') as string;
               const password = formData.get('password') as string;
               const confirmPassword = formData.get('confirmPassword') as string;
               
@@ -255,22 +256,26 @@ export default function ProfilePage() {
                 return toast.error("Passwords do not match");
               }
               
-              if (password.length < 6) {
-                return toast.error("Password must be at least 6 characters");
+              if (password.length < 12) {
+                return toast.error("Password must be at least 12 characters");
               }
               
-              await vignan.auth.updatePassword(password);
-              e.currentTarget.reset();
+              const updated = await vignan.auth.updatePassword(currentPassword, password);
+              if (updated) e.currentTarget.reset();
             }}
             className="space-y-4 max-w-sm"
           >
             <div className="space-y-2">
+              <Label htmlFor="currentPassword">Current Password</Label>
+              <Input id="currentPassword" name="currentPassword" type="password" autoComplete="current-password" required />
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="password">New Password</Label>
-              <Input id="password" name="password" type="password" required />
+              <Input id="password" name="password" type="password" minLength={12} maxLength={128} autoComplete="new-password" required />
             </div>
             <div className="space-y-2">
               <Label htmlFor="confirmPassword">Confirm New Password</Label>
-              <Input id="confirmPassword" name="confirmPassword" type="password" required />
+              <Input id="confirmPassword" name="confirmPassword" type="password" minLength={12} maxLength={128} autoComplete="new-password" required />
             </div>
             <Button type="submit">Update Password</Button>
           </form>

@@ -4,8 +4,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
 import { DashboardLayout } from '@/components/dashboard-layout';
-import { vignan } from '@/lib/vignan-client';
-import { Course, Exam } from '@/lib/mock-data';
+import { getExamAssessment, submitExamAssessment } from '@/lib/actions/assessments';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -14,13 +13,13 @@ import { CheckCircle2, XCircle, Clock } from 'lucide-react';
 
 export default function ExamPage({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
   const params = use(paramsPromise);
-  const { user, loading, updateUser } = useAuth();
+  const { user, loading } = useAuth();
   const router = useRouter();
-  const [exam, setExam] = useState<Exam | null>(null);
-  const [course, setCourse] = useState<Course | null>(null);
+  const [exam, setExam] = useState<NonNullable<Awaited<ReturnType<typeof getExamAssessment>>> | null>(null);
   const [answers, setAnswers] = useState<number[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
+  const [correctAnswers, setCorrectAnswers] = useState<number[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [timeLeft, setTimeLeft] = useState(0);
 
@@ -32,13 +31,11 @@ export default function ExamPage({ params: paramsPromise }: { params: Promise<{ 
 
   useEffect(() => {
     const fetchExam = async () => {
-      const courses = await vignan.entities.Course.list();
-      const courseWithExam = courses.find(c => c.exam.id === params.id);
-      if (courseWithExam) {
-        setCourse(courseWithExam);
-        setExam(courseWithExam.exam);
-        setAnswers(new Array(courseWithExam.exam.questions.length).fill(-1));
-        setTimeLeft(courseWithExam.exam.duration * 60); // Convert to seconds
+      const assessment = await getExamAssessment(params.id);
+      if (assessment) {
+        setExam(assessment);
+        setAnswers(new Array(assessment.questions.length).fill(-1));
+        setTimeLeft(assessment.duration * 60);
       }
     };
     fetchExam();
@@ -66,66 +63,12 @@ export default function ExamPage({ params: paramsPromise }: { params: Promise<{ 
     setAnswers(newAnswers);
   };
 
-  const calculateScore = () => {
-    if (!exam) return 0;
-    let correct = 0;
-    exam.questions.forEach((question, index) => {
-      if (answers[index] === question.correctAnswer) {
-        correct++;
-      }
-    });
-    return Math.round((correct / exam.questions.length) * 100);
-  };
-
   const handleSubmit = async () => {
-    const calculatedScore = calculateScore();
-    setScore(calculatedScore);
+    if (!user || !exam) return;
+    const result = await submitExamAssessment(exam.id, answers);
+    setScore(result.score);
+    setCorrectAnswers(result.correctAnswers);
     setSubmitted(true);
-
-    // Save exam result
-    if (user && exam && course) {
-      try {
-        await vignan.entities.Course.update(course.id, {
-          exam: {
-            ...course.exam,
-            submissions: {
-              ...course.exam.submissions,
-              [user.id]: {
-                studentId: user.id,
-                submittedAt: new Date().toISOString(),
-                answers,
-                score: calculatedScore,
-              }
-            }
-          }
-        });
-
-        // Issue certificate if passed
-        if (calculatedScore >= exam.passingScore) {
-          const certificateId = `cert-${user.id}-${course.id}-${Date.now()}`;
-          
-          // Update student
-          const updatedCertificates = [...user.certificates, certificateId];
-          const updatedUser = await vignan.auth.updateMe({
-            certificates: updatedCertificates
-          });
-          updateUser(updatedUser);
-
-          // Save certificate entity
-          await vignan.entities.Certificate.create({
-            id: certificateId,
-            studentId: user.id,
-            courseId: course.id,
-            studentName: user.name,
-            courseName: course.title,
-            issuedDate: new Date().toISOString().split('T')[0],
-            certificateNumber: `CERT-${Date.now()}`,
-          } as any); // Type cast if needed due to id/created_date handling in service
-        }
-      } catch (error) {
-        console.error('Exam submission error:', error);
-      }
-    }
   };
 
   const formatTime = (seconds: number) => {
@@ -144,7 +87,7 @@ export default function ExamPage({ params: paramsPromise }: { params: Promise<{ 
     );
   }
 
-  if (!user || !exam || !course) {
+  if (!user || !exam) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-screen">
@@ -196,7 +139,7 @@ export default function ExamPage({ params: paramsPromise }: { params: Promise<{ 
             <div className="pt-4 border-t space-y-3">
               <p className="text-sm text-muted-foreground">
                 You answered{' '}
-                {answers.filter((ans, idx) => ans === exam.questions[idx].correctAnswer)
+                {answers.filter((ans, idx) => ans === correctAnswers[idx])
                   .length}{' '}
                 out of {exam.questions.length} questions correctly.
               </p>
@@ -207,7 +150,7 @@ export default function ExamPage({ params: paramsPromise }: { params: Promise<{ 
           <div className="space-y-4">
             <h2 className="text-2xl font-bold">Review Your Answers</h2>
             {exam.questions.map((q, idx) => {
-              const isCorrect = answers[idx] === q.correctAnswer;
+              const isCorrect = answers[idx] === correctAnswers[idx];
               return (
                 <Card key={idx} className="p-6 space-y-4">
                   <div className="flex items-start justify-between gap-4">
@@ -224,7 +167,7 @@ export default function ExamPage({ params: paramsPromise }: { params: Promise<{ 
                                 ? isCorrect
                                   ? 'bg-green-50 border-green-200'
                                   : 'bg-red-50 border-red-200'
-                                : optIdx === q.correctAnswer
+                                : optIdx === correctAnswers[idx]
                                 ? 'bg-green-50 border-green-200'
                                 : 'bg-muted'
                             }`}
@@ -233,7 +176,7 @@ export default function ExamPage({ params: paramsPromise }: { params: Promise<{ 
                               {optIdx === answers[idx] && (
                                 <span className="font-medium">Your answer: </span>
                               )}
-                              {optIdx === q.correctAnswer && !isCorrect && (
+                              {optIdx === correctAnswers[idx] && !isCorrect && (
                                 <span className="font-medium">Correct answer: </span>
                               )}
                               {option}
@@ -259,7 +202,7 @@ export default function ExamPage({ params: paramsPromise }: { params: Promise<{ 
             <Button
               variant="outline"
               className="flex-1 min-w-[120px]"
-              onClick={() => router.push(`/courses/${course.id}`)}
+              onClick={() => router.push(`/courses/${exam.course.id}`)}
             >
               Back to Course
             </Button>

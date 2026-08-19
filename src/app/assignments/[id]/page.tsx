@@ -306,10 +306,10 @@ export default function AssignmentDetailPage({
                   </span>
                 </label>
                 <FileUpload
-                  folder="assignment-submissions"
+                  purpose="assignment-submission"
+                  maxSize={25}
                   accept=".pdf,.doc,.docx,.txt,.md,.zip,.png,.jpg,.jpeg,.webp"
                   label="Upload assignment file"
-                  maxSize={25}
                   onSuccess={(url, type, name) => setAttachment({ url, type, name })}
                   onRemove={() => setAttachment(null)}
                 />

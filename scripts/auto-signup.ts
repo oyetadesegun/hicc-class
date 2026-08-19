@@ -2,11 +2,11 @@ import { PrismaClient } from '@prisma/client'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { Pool } from 'pg'
 import 'dotenv/config'
+import { hashPassword } from '../src/lib/auth/password'
 
 async function main() {
   const pool = new Pool({ 
-    connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false }
+    connectionString: process.env.DATABASE_URL
   })
   const adapter = new PrismaPg(pool)
   const prisma = new PrismaClient({ adapter })
@@ -15,12 +15,15 @@ async function main() {
 
   // 0. Sync Users from initial-data.json
   const data = require('../src/lib/initial-data.json')
+  const devSeedPassword = process.env.DEV_SEED_PASSWORD
+  if (!devSeedPassword) throw new Error('DEV_SEED_PASSWORD is required')
+  const password = await hashPassword(devSeedPassword)
   for (const userData of data.users) {
     console.log(`Syncing user: ${userData.email}`)
     await prisma.user.upsert({
       where: { email: userData.email },
-      update: { password: userData.password }, // Update password just in case user requested it
-      create: userData
+      update: {},
+      create: { ...userData, password }
     })
   }
 

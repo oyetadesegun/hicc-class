@@ -1,8 +1,15 @@
 import { PrismaClient } from '@prisma/client';
+import { hashPassword } from '../src/lib/auth/password';
 
 const prisma = new PrismaClient();
 
 async function main() {
+  const studentPassword = process.env.SEED_STUDENT_PASSWORD;
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD;
+  if (!studentPassword || !adminPassword) {
+    throw new Error('SEED_STUDENT_PASSWORD and SEED_ADMIN_PASSWORD are required');
+  }
+
   console.log('Cleaning up database...');
   await prisma.submission.deleteMany();
   await prisma.userCourse.deleteMany();
@@ -23,7 +30,7 @@ async function main() {
       id: 'student-1',
       name: 'Harvester Student',
       email: 'student@harvesters.org',
-      password: 'password123', // In a real app, use hashing!
+      password: await hashPassword(studentPassword),
       role: 'STUDENT',
       createdAt: new Date('2026-01-15'),
     },
@@ -34,7 +41,7 @@ async function main() {
       id: 'admin-1',
       name: 'Admin User',
       email: 'admin@harvesters.org',
-      password: 'password123',
+      password: await hashPassword(adminPassword),
       role: 'ADMIN',
     },
   });
@@ -103,8 +110,11 @@ async function main() {
     const course = await prisma.course.create({
       data: {
         ...courseInfo,
-        lessons: {
-          create: lessons,
+        sections: {
+          create: [
+            { title: 'Course Lessons', type: 'CORE', order: 1, countsTowardProgress: true },
+            { title: 'Recorded Live Sessions', type: 'RECORDED', order: 2, countsTowardProgress: false },
+          ],
         },
         liveSessions: {
           create: liveSessions,
@@ -116,6 +126,12 @@ async function main() {
           create: exams,
         },
       },
+      include: { sections: true },
+    });
+    const coreSection = course.sections.find((section) => section.type === 'CORE');
+    if (!coreSection) throw new Error(`Core section was not created for ${course.title}`);
+    await prisma.lesson.createMany({
+      data: lessons.map((lesson) => ({ ...lesson, courseId: course.id, sectionId: coreSection.id })),
     });
     console.log(`Created course: ${course.title}`);
   }

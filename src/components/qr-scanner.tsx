@@ -1,15 +1,15 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 
 interface QRScannerProps {
   onScan: (decodedText: string) => void;
-  onError?: (error: any) => void;
+  onError?: (error: unknown) => void;
 }
 
 export function QRScanner({ onScan, onError }: QRScannerProps) {
-  const [scannerId] = useState(`qr-reader-${Math.random().toString(36).substring(2, 9)}`);
+  const scannerId = `qr-reader-${useId().replace(/:/g, '')}`;
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
 
   useEffect(() => {

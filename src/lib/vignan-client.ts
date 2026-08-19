@@ -12,7 +12,6 @@ const adaptUserToStudent = (user: any): Student | null => {
     id: user.id,
     name: user.name,
     email: user.email,
-    password: user.password,
     enrolledCourses: user.enrolledCourses?.map((ec: any) => ec.courseId || ec.id) || [],
     certificates: user.certificates?.map((c: any) => c.id) || [],
     attendance: user.enrolledCourses?.reduce((acc: any, ec: any) => {
@@ -36,7 +35,10 @@ const auth = {
   },
   login: async (email: string, password: string): Promise<Student> => {
     const user = await authActions.login(email, password);
-    if (!user) toast.error("Invalid email or password");
+    if (!user) {
+      toast.error("Invalid email or password");
+      throw new Error('Invalid email or password');
+    }
     return adaptUserToStudent(user)!;
   },
   signup: async (name: string, email: string, password: string, phoneNumber?: string): Promise<Student> => {
@@ -50,14 +52,14 @@ const auth = {
     const user = await authActions.updateMe(updates as any);
     return adaptUserToStudent(user)!;
   },
-  updatePassword: async (password: string): Promise<boolean> => {
+  updatePassword: async (currentPassword: string, newPassword: string): Promise<boolean> => {
     try {
-      await authActions.updatePassword(password);
+      await authActions.updatePassword(currentPassword, newPassword);
       toast.success("Password updated successfully");
       return true;
     } catch (error) {
       console.error('Update password error:', error);
-      toast.error("Failed to update password");
+      toast.error(error instanceof Error ? error.message : "Failed to update password");
       return false;
     }
   }

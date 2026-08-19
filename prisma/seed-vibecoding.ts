@@ -3,6 +3,32 @@ import prisma from '../src/lib/prisma';
 
 const WHATSAPP_GROUP_LINK = 'https://chat.whatsapp.com/CGhSYILSI9hCQFA3Weix0N';
 
+async function ensureCourseSections(courseId: string) {
+  const core = await prisma.courseSection.upsert({
+    where: { courseId_type: { courseId, type: 'CORE' } },
+    update: {},
+    create: {
+      courseId,
+      title: 'Course Lessons',
+      type: 'CORE',
+      order: 1,
+      countsTowardProgress: true,
+    },
+  });
+  await prisma.courseSection.upsert({
+    where: { courseId_type: { courseId, type: 'RECORDED' } },
+    update: {},
+    create: {
+      courseId,
+      title: 'Recorded Live Sessions',
+      type: 'RECORDED',
+      order: 2,
+      countsTowardProgress: false,
+    },
+  });
+  return core;
+}
+
 // ─────────────────────────────────────────────────────────────
 // WEEK 1 MODULE CONTENT
 // ─────────────────────────────────────────────────────────────
@@ -567,16 +593,17 @@ async function main() {
   }
 
   let vibeOrder = 1;
+  const vibeCoreSection = await ensureCourseSections(vibeCourseId!);
   console.log('Seeding Week 1 lessons...');
   for (const lesson of week1Lessons) {
     await prisma.lesson.create({
-      data: { title: lesson.title, content: lesson.content, videoUrl: lesson.videoUrl, duration: lesson.duration, order: vibeOrder++, courseId: vibeCourseId! }
+      data: { title: lesson.title, content: lesson.content, videoUrl: lesson.videoUrl, duration: lesson.duration, order: vibeOrder++, courseId: vibeCourseId!, sectionId: vibeCoreSection.id }
     });
   }
   console.log('Seeding Week 2 lessons...');
   for (const lesson of week2Lessons) {
     await prisma.lesson.create({
-      data: { title: lesson.title, content: lesson.content, videoUrl: lesson.videoUrl, duration: lesson.duration, order: vibeOrder++, courseId: vibeCourseId! }
+      data: { title: lesson.title, content: lesson.content, videoUrl: lesson.videoUrl, duration: lesson.duration, order: vibeOrder++, courseId: vibeCourseId!, sectionId: vibeCoreSection.id }
     });
   }
 
@@ -678,16 +705,17 @@ async function main() {
   }
 
   let autoOrder = 1;
+  const autoCoreSection = await ensureCourseSections(autoCourseId!);
   console.log('Seeding Week 3 lessons...');
   for (const lesson of week3Lessons) {
     await prisma.lesson.create({
-      data: { title: lesson.title, content: lesson.content, videoUrl: lesson.videoUrl, duration: lesson.duration, order: autoOrder++, courseId: autoCourseId! }
+      data: { title: lesson.title, content: lesson.content, videoUrl: lesson.videoUrl, duration: lesson.duration, order: autoOrder++, courseId: autoCourseId!, sectionId: autoCoreSection.id }
     });
   }
   console.log('Seeding Week 4 lessons...');
   for (const lesson of week4Lessons) {
     await prisma.lesson.create({
-      data: { title: lesson.title, content: lesson.content, videoUrl: lesson.videoUrl, duration: lesson.duration, order: autoOrder++, courseId: autoCourseId! }
+      data: { title: lesson.title, content: lesson.content, videoUrl: lesson.videoUrl, duration: lesson.duration, order: autoOrder++, courseId: autoCourseId!, sectionId: autoCoreSection.id }
     });
   }
 
