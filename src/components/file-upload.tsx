@@ -9,13 +9,15 @@ import { toast } from "sonner";
 interface FileUploadProps {
   onSuccess: (url: string, fileType: string, fileName: string) => void;
   onRemove?: () => void;
-  folder?: string;
+  purpose: "lesson-video" | "course-material" | "assignment-submission";
   accept?: string;
   label?: string;
   maxSize?: number; // in MB
+  courseId?: string;
+  sectionType?: "CORE" | "RECORDED";
 }
 
-export function FileUpload({ onSuccess, onRemove, folder = "uploads", accept = "*", label = "Upload File", maxSize = 100 }: FileUploadProps) {
+export function FileUpload({ onSuccess, onRemove, purpose, accept = "*", label = "Upload File", maxSize = 100, courseId, sectionType }: FileUploadProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -43,27 +45,26 @@ export function FileUpload({ onSuccess, onRemove, folder = "uploads", accept = "
 
     try {
       // 1. Get Authentication Parameters
-      const authResponse = await fetch("/api/imagekit-auth");
+      const authResponse = await fetch("/api/imagekit-auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName: file.name, purpose, courseId, sectionType }),
+      });
       if (!authResponse.ok) throw new Error("Failed to get authentication parameters");
-      const { signature, token, expire, publicKey } = await authResponse.json();
-
-      if (!publicKey && !process.env.NEXT_PUBLIC_IMAGEKIT_PUBLIC_KEY) {
-        throw new Error("Missing ImageKit public key");
-      }
+      const { token, uploadPayload } = await authResponse.json();
 
       // 2. Upload to ImageKit
       const formData = new FormData();
       formData.append("file", file);
       formData.append("fileName", file.name);
-      formData.append("publicKey", publicKey || process.env.NEXT_PUBLIC_IMAGEKIT_PUBLIC_KEY!);
-      formData.append("signature", signature);
-      formData.append("expire", expire.toString());
       formData.append("token", token);
-      formData.append("useUniqueFileName", "true");
-      formData.append("folder", folder);
+      formData.append("useUniqueFileName", uploadPayload.useUniqueFileName);
+      formData.append("folder", uploadPayload.folder);
+      formData.append("isPrivateFile", uploadPayload.isPrivateFile);
+      formData.append("checks", uploadPayload.checks);
 
       const xhr = new XMLHttpRequest();
-      xhr.open("POST", "https://upload.imagekit.io/api/v1/files/upload", true);
+      xhr.open("POST", "https://upload.imagekit.io/api/v2/files/upload", true);
 
       xhr.upload.onprogress = (event) => {
         if (event.lengthComputable) {
@@ -81,12 +82,18 @@ export function FileUpload({ onSuccess, onRemove, folder = "uploads", accept = "
           onSuccess(response.url, file.type, file.name);
           toast.success("File uploaded successfully");
         } else {
-          throw new Error("Upload failed");
+          setIsUploading(false);
+          setProgress(0);
+          setFileName(null);
+          toast.error("Upload failed. Check the file type and size, then try again.");
         }
       };
 
       xhr.onerror = () => {
-        throw new Error("Upload failed");
+        setIsUploading(false);
+        setProgress(0);
+        setFileName(null);
+        toast.error("Upload failed due to a network error");
       };
 
       xhr.send(formData);

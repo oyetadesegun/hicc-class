@@ -1,23 +1,7 @@
 'use server';
 
-import { cookies } from 'next/headers';
 import prisma from '@/lib/prisma';
-
-const AUTH_COOKIE = 'auth_session';
-
-async function requireAdmin() {
-  const cookieStore = await cookies();
-  const userId = cookieStore.get(AUTH_COOKIE)?.value;
-  if (!userId) throw new Error('Not authenticated');
-
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { id: true, role: true },
-  });
-
-  if (!user || user.role !== 'ADMIN') throw new Error('Unauthorized');
-  return user;
-}
+import { requireAdmin } from '@/lib/auth/session';
 
 function percent(completed: number, total: number) {
   if (total <= 0) return 0;
@@ -58,7 +42,10 @@ export async function getAdminStudentsOverview() {
             select: {
               id: true,
               title: true,
-              lessons: { select: { id: true } },
+              lessons: {
+                where: { section: { countsTowardProgress: true } },
+                select: { id: true },
+              },
               liveSessions: { select: { id: true } },
               assignments: { select: { id: true } },
             },
@@ -74,7 +61,12 @@ export async function getAdminStudentsOverview() {
     const courseSummaries = student.enrolledCourses.map((enrollment) => {
       const course = enrollment.course;
       const records = student.attendanceRecords.filter((record) => record.courseId === course.id);
-      const watchedLessons = new Set(records.filter((record) => record.lessonId).map((record) => record.lessonId as string));
+      const requiredLessonIds = new Set(course.lessons.map((lesson) => lesson.id));
+      const watchedLessons = new Set(
+        records
+          .filter((record) => record.lessonId && requiredLessonIds.has(record.lessonId))
+          .map((record) => record.lessonId as string)
+      );
       const attendedLiveSessions = new Set(records.filter((record) => record.liveSessionId).map((record) => record.liveSessionId as string));
       const submittedAssignments = new Set(
         student.submissions

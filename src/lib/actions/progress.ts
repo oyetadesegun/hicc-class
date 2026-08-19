@@ -1,13 +1,10 @@
 'use server';
 
-import { cookies } from 'next/headers';
 import prisma from '@/lib/prisma';
-
-const AUTH_COOKIE = 'auth_session';
+import { getCurrentUser } from '@/lib/auth/session';
 
 async function getUserId() {
-  const cookieStore = await cookies();
-  return cookieStore.get(AUTH_COOKIE)?.value;
+  return (await getCurrentUser())?.id;
 }
 
 function percent(completed: number, total: number) {
@@ -31,6 +28,7 @@ export async function getStudentDashboardSummary() {
           course: {
             include: {
               lessons: {
+                where: { section: { countsTowardProgress: true } },
                 select: { id: true, title: true, order: true },
                 orderBy: { order: 'asc' },
               },
@@ -86,7 +84,10 @@ export async function getStudentDashboardSummary() {
     prisma.course.findMany({
       where: enrolledCourseIds.length ? { id: { notIn: enrolledCourseIds } } : {},
       include: {
-        lessons: { select: { id: true } },
+        lessons: {
+          where: { section: { countsTowardProgress: true } },
+          select: { id: true },
+        },
       },
       orderBy: { createdAt: 'desc' },
     }),
@@ -112,7 +113,12 @@ export async function getStudentDashboardSummary() {
   const enrolledCourses = user.enrolledCourses.map((enrollment) => {
     const course = enrollment.course;
     const records = attendanceByCourse.get(course.id) ?? [];
-    const watchedLessons = new Set(records.filter((record) => record.lessonId).map((record) => record.lessonId as string));
+    const requiredLessonIds = new Set(course.lessons.map((lesson) => lesson.id));
+    const watchedLessons = new Set(
+      records
+        .filter((record) => record.lessonId && requiredLessonIds.has(record.lessonId))
+        .map((record) => record.lessonId as string)
+    );
     const attendedLiveSessions = new Set(records.filter((record) => record.liveSessionId).map((record) => record.liveSessionId as string));
     const submittedAssignments = submittedAssignmentsByCourse.get(course.id) ?? new Set<string>();
 

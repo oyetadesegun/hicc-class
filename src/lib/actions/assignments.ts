@@ -2,6 +2,7 @@
 
 import prisma from '@/lib/prisma';
 import { me } from './auth';
+import { signMediaUrl } from '@/lib/imagekit';
 
 type AssignmentAttachmentInput = {
   url: string;
@@ -72,6 +73,27 @@ function validateAttachment(attachment?: AssignmentAttachmentInput) {
   return { url, type, name };
 }
 
+async function canAccessCourse(user: { id: string; role: string }, courseId: string) {
+  if (user.role === 'ADMIN') return true;
+  return Boolean(await prisma.userCourse.findUnique({
+    where: { userId_courseId: { userId: user.id, courseId } },
+    select: { userId: true },
+  }));
+}
+
+function signAssignmentMedia<T extends { attachmentUrl?: string | null; submissions?: Array<{ attachmentUrl?: string | null }> }>(assignment: T) {
+  return {
+    ...assignment,
+    attachmentUrl: signMediaUrl(assignment.attachmentUrl),
+    ...(assignment.submissions && {
+      submissions: assignment.submissions.map((submission) => ({
+        ...submission,
+        attachmentUrl: signMediaUrl(submission.attachmentUrl),
+      })),
+    }),
+  };
+}
+
 // ─────────────────────────────────────────────────────────────
 // QUERIES
 // ─────────────────────────────────────────────────────────────
@@ -95,7 +117,8 @@ export async function getAssignmentByLesson(lessonId: string) {
     },
   });
 
-  return assignment;
+  if (!assignment || !(await canAccessCourse(user, assignment.courseId))) return null;
+  return signAssignmentMedia(assignment);
 }
 
 /**
@@ -105,6 +128,7 @@ export async function getAssignmentsByCourse(courseId: string) {
   const user = await me();
   if (!user) return [];
 
+  if (!(await canAccessCourse(user, courseId))) return [];
   const assignments = await prisma.assignment.findMany({
     where: { courseId },
     include: {
@@ -118,7 +142,7 @@ export async function getAssignmentsByCourse(courseId: string) {
     orderBy: { lesson: { order: 'asc' } },
   });
 
-  return assignments;
+  return assignments.map(signAssignmentMedia);
 }
 
 /**
@@ -141,7 +165,8 @@ export async function getAssignmentById(assignmentId: string) {
     },
   });
 
-  return assignment;
+  if (!assignment || !(await canAccessCourse(user, assignment.course.id))) return null;
+  return signAssignmentMedia(assignment);
 }
 
 /**
@@ -289,5 +314,5 @@ export async function getUserSubmission(assignmentId: string) {
     orderBy: { submittedAt: 'desc' },
   });
 
-  return submission;
+  return submission ? { ...submission, attachmentUrl: signMediaUrl(submission.attachmentUrl) } : null;
 }

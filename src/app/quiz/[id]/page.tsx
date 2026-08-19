@@ -4,8 +4,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
 import { DashboardLayout } from '@/components/dashboard-layout';
-import { vignan } from '@/lib/vignan-client';
-import { Course, Quiz } from '@/lib/mock-data';
+import { getQuizAssessment, submitQuizAssessment } from '@/lib/actions/assessments';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -16,11 +15,11 @@ export default function QuizPage({ params: paramsPromise }: { params: Promise<{ 
   const params = use(paramsPromise);
   const { user, loading } = useAuth();
   const router = useRouter();
-  const [quiz, setQuiz] = useState<Quiz | null>(null);
-  const [course, setCourse] = useState<Course | null>(null);
+  const [quiz, setQuiz] = useState<NonNullable<Awaited<ReturnType<typeof getQuizAssessment>>> | null>(null);
   const [answers, setAnswers] = useState<number[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
+  const [correctAnswers, setCorrectAnswers] = useState<number[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState(0);
 
   useEffect(() => {
@@ -31,12 +30,10 @@ export default function QuizPage({ params: paramsPromise }: { params: Promise<{ 
 
   useEffect(() => {
     const fetchQuiz = async () => {
-      const courses = await vignan.entities.Course.list();
-      const courseWithQuiz = (courses as Course[]).find((c: any) => c.quiz?.id === params.id);
-      if (courseWithQuiz) {
-        setCourse(courseWithQuiz);
-        setQuiz(courseWithQuiz.quiz);
-        setAnswers(new Array(courseWithQuiz.quiz.questions.length).fill(-1));
+      const assessment = await getQuizAssessment(params.id);
+      if (assessment) {
+        setQuiz(assessment);
+        setAnswers(new Array(assessment.questions.length).fill(-1));
       }
     };
     fetchQuiz();
@@ -48,43 +45,12 @@ export default function QuizPage({ params: paramsPromise }: { params: Promise<{ 
     setAnswers(newAnswers);
   };
 
-  const calculateScore = () => {
-    if (!quiz) return 0;
-    let correct = 0;
-    quiz.questions.forEach((question, index) => {
-      if (answers[index] === question.correctAnswer) {
-        correct++;
-      }
-    });
-    return Math.round((correct / quiz.questions.length) * 100);
-  };
-
   const handleSubmit = async () => {
-    const calculatedScore = calculateScore();
-    setScore(calculatedScore);
+    if (!user || !quiz) return;
+    const result = await submitQuizAssessment(quiz.id, answers);
+    setScore(result.score);
+    setCorrectAnswers(result.correctAnswers);
     setSubmitted(true);
-
-    // Save quiz result
-    if (user && quiz && course) {
-      try {
-        await vignan.entities.Course.update(course.id, {
-          quiz: {
-            ...course.quiz,
-            submissions: {
-              ...course.quiz.submissions,
-              [user.id]: {
-                studentId: user.id,
-                submittedAt: new Date().toISOString(),
-                answers,
-                score: calculatedScore,
-              }
-            }
-          }
-        });
-      } catch (error) {
-        console.error('Quiz submission error:', error);
-      }
-    }
   };
 
   if (loading) {
@@ -97,7 +63,7 @@ export default function QuizPage({ params: paramsPromise }: { params: Promise<{ 
     );
   }
 
-  if (!user || !quiz || !course) {
+  if (!user || !quiz) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-screen">
@@ -135,7 +101,7 @@ export default function QuizPage({ params: paramsPromise }: { params: Promise<{ 
             </div>
             <div className="pt-4 border-t space-y-3">
               <p className="text-sm text-muted-foreground">
-                You answered {answers.filter((ans, idx) => ans === quiz.questions[idx].correctAnswer).length} out of{' '}
+                You answered {answers.filter((ans, idx) => ans === correctAnswers[idx]).length} out of{' '}
                 {quiz.questions.length} questions correctly.
               </p>
             </div>
@@ -145,7 +111,7 @@ export default function QuizPage({ params: paramsPromise }: { params: Promise<{ 
           <div className="space-y-4">
             <h2 className="text-2xl font-bold">Review Your Answers</h2>
             {quiz.questions.map((q, idx) => {
-              const isCorrect = answers[idx] === q.correctAnswer;
+              const isCorrect = answers[idx] === correctAnswers[idx];
               return (
                 <Card key={idx} className="p-6 space-y-4">
                   <div className="flex items-start justify-between gap-4">
@@ -162,7 +128,7 @@ export default function QuizPage({ params: paramsPromise }: { params: Promise<{ 
                                 ? isCorrect
                                   ? 'bg-green-50 border-green-200'
                                   : 'bg-red-50 border-red-200'
-                                : optIdx === q.correctAnswer
+                                : optIdx === correctAnswers[idx]
                                 ? 'bg-green-50 border-green-200'
                                 : 'bg-muted'
                             }`}
@@ -171,7 +137,7 @@ export default function QuizPage({ params: paramsPromise }: { params: Promise<{ 
                               {optIdx === answers[idx] && (
                                 <span className="font-medium">Your answer: </span>
                               )}
-                              {optIdx === q.correctAnswer && !isCorrect && (
+                              {optIdx === correctAnswers[idx] && !isCorrect && (
                                 <span className="font-medium">Correct answer: </span>
                               )}
                               {option}

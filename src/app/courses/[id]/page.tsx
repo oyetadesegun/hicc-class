@@ -27,7 +27,7 @@ export default function CourseDetailPage({ params: paramsPromise }: { params: Pr
   const [course, setCourse] = useState<any | undefined>();
   const [fetching, setFetching] = useState(true);
 
-  const [selectedLesson, setSelectedLesson] = useState(0);
+  const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('lessons');
 
   const [watchedLessons, setWatchedLessons] = useState<Set<string>>(new Set());
@@ -51,6 +51,8 @@ export default function CourseDetailPage({ params: paramsPromise }: { params: Pr
         const courseData = await getCourse(params.id);
         if (courseData) {
           setCourse(courseData);
+          const initialLesson = courseData.lessons.find((lesson: any) => lesson.sectionType === 'CORE') || courseData.lessons[0];
+          setSelectedLessonId(initialLesson?.id || null);
 
           if (user) {
             const attendance = await getUserAttendance(params.id);
@@ -144,9 +146,16 @@ export default function CourseDetailPage({ params: paramsPromise }: { params: Pr
   if (!user) return null;
 
   const isEnrolled = user.enrolledCourses.includes(params.id);
-  const currentLesson = course.lessons[selectedLesson];
-  const totalItems = course.lessons.length + course.liveSessions.length;
-  const attendedItems = watchedLessons.size + attendedLiveSessions.size;
+  const coreLessons = course.lessons.filter((lesson: any) => lesson.sectionType === 'CORE');
+  const recordedLessons = course.lessons.filter((lesson: any) => lesson.sectionType === 'RECORDED');
+  const coreSection = course.sections?.find((section: any) => section.type === 'CORE');
+  const recordedSection = course.sections?.find((section: any) => section.type === 'RECORDED');
+  const currentLesson = course.lessons.find((lesson: any) => lesson.id === selectedLessonId)
+    || coreLessons[0]
+    || recordedLessons[0];
+  const requiredWatchedCount = coreLessons.filter((lesson: any) => watchedLessons.has(lesson.id)).length;
+  const totalItems = coreLessons.length + course.liveSessions.length;
+  const attendedItems = requiredWatchedCount + attendedLiveSessions.size;
   const progressPercentage = totalItems === 0 ? 0 : Math.round((attendedItems / totalItems) * 100);
   const liveSessions = [...(course.liveSessions || [])].sort(
     (a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime()
@@ -270,10 +279,16 @@ export default function CourseDetailPage({ params: paramsPromise }: { params: Pr
               </div>
               <div className="flex items-center gap-2">
                 <BookOpen className="w-4 h-4" />
-                <span>{course.lessons.length} lessons</span>
+                <span>{coreLessons.length} lessons</span>
+              </div>
+              {recordedLessons.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <Play className="w-4 h-4" />
+                  <span>{recordedLessons.length} recorded sessions</span>
+                </div>
+              )}
               </div>
             </div>
-          </div>
 
           <Card className="p-6 md:w-80 space-y-4">
             <div className="space-y-2">
@@ -302,35 +317,54 @@ export default function CourseDetailPage({ params: paramsPromise }: { params: Pr
             <div className="grid md:grid-cols-3 gap-6">
               {/* Sidebar List */}
               <div className="space-y-4 md:col-span-1 order-2 md:order-1">
-                <h3 className="font-semibold text-lg">Lessons</h3>
-                <div className="space-y-2 max-h-[600px] overflow-y-auto pr-2">
-                  {course.lessons.map((lesson: any, index: number) => (
-                    <button
-                      key={lesson.id}
-                      onClick={() => setSelectedLesson(index)}
-                      className={`w-full text-left p-4 rounded-lg transition-colors border ${selectedLesson === index
-                        ? 'border-primary bg-primary/5'
-                        : 'border-transparent hover:border-border hover:bg-secondary/50'
-                        }`}
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-start justify-between gap-2">
-                          <span className="text-sm font-medium text-muted-foreground">
-                            Lesson {index + 1}
-                          </span>
-                          {watchedLessons.has(lesson.id) && (
-                            <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0" />
+                <h3 className="font-semibold text-lg">Course Content</h3>
+                <div className="space-y-5 max-h-[600px] overflow-y-auto pr-2">
+                  {[
+                    { title: coreSection?.title || 'Course Lessons', description: coreSection?.description, lessons: coreLessons, supplemental: false },
+                    { title: recordedSection?.title || 'Recorded Live Sessions', description: recordedSection?.description, lessons: recordedLessons, supplemental: true },
+                  ].filter((section) => section.lessons.length > 0).map((section) => (
+                    <section key={section.title} className="space-y-2">
+                      <div className="px-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <h4 className="text-sm font-semibold">{section.title}</h4>
+                          {section.supplemental && (
+                            <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide">
+                              Additional
+                            </span>
                           )}
                         </div>
-                        <p className={`font-medium line-clamp-2 ${selectedLesson === index ? 'text-primary' : ''
-                          }`}>
-                          {lesson.title}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {lesson.duration}m
-                        </p>
+                        {section.supplemental && (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {section.description || 'Does not affect course completion'}
+                          </p>
+                        )}
                       </div>
-                    </button>
+                      {section.lessons.map((lesson: any, index: number) => (
+                        <button
+                          key={lesson.id}
+                          onClick={() => setSelectedLessonId(lesson.id)}
+                          className={`w-full text-left p-4 rounded-lg transition-colors border ${currentLesson?.id === lesson.id
+                            ? 'border-primary bg-primary/5'
+                            : 'border-transparent hover:border-border hover:bg-secondary/50'
+                            }`}
+                        >
+                          <div className="space-y-1">
+                            <div className="flex items-start justify-between gap-2">
+                              <span className="text-sm font-medium text-muted-foreground">
+                                {section.supplemental ? 'Recording' : 'Lesson'} {index + 1}
+                              </span>
+                              {watchedLessons.has(lesson.id) && (
+                                <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0" />
+                              )}
+                            </div>
+                            <p className={`font-medium line-clamp-2 ${currentLesson?.id === lesson.id ? 'text-primary' : ''}`}>
+                              {lesson.title}
+                            </p>
+                            <p className="text-xs text-muted-foreground">{lesson.duration}m</p>
+                          </div>
+                        </button>
+                      ))}
+                    </section>
                   ))}
                 </div>
               </div>
@@ -422,7 +456,9 @@ export default function CourseDetailPage({ params: paramsPromise }: { params: Pr
 
                       <div className="pt-4 border-t space-y-3">
                         <p className="text-sm text-muted-foreground">
-                          This is lesson {selectedLesson + 1} of {course.lessons.length}
+                          {currentLesson.sectionType === 'RECORDED'
+                            ? `Recorded session ${recordedLessons.findIndex((lesson: any) => lesson.id === currentLesson.id) + 1} of ${recordedLessons.length} — optional content`
+                            : `Lesson ${coreLessons.findIndex((lesson: any) => lesson.id === currentLesson.id) + 1} of ${coreLessons.length}`}
                         </p>
                         {!watchedLessons.has(currentLesson.id) && (
                           <Button

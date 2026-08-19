@@ -25,6 +25,12 @@ export async function markLessonWatched(lessonId: string, courseId: string) {
     return { success: false, error: 'You are not enrolled in this course' };
   }
 
+  const lesson = await prisma.lesson.findFirst({
+    where: { id: lessonId, courseId },
+    select: { id: true },
+  });
+  if (!lesson) return { success: false, error: 'Lesson not found in this course' };
+
   // Record attendance
   try {
     await prisma.attendanceRecord.upsert({
@@ -181,12 +187,12 @@ export async function markAttendanceByQR(sessionId: string, code: string) {
     return { success: false, error: 'Invalid or missing QR code data.' };
   }
 
-  // Check expiry (6 hours)
-  const sixHoursInMs = 6 * 60 * 60 * 1000;
+  // Keep QR and manually-entered attendance codes on the same short lifetime.
+  const attendanceWindowMs = 15 * 60 * 1000;
   const now = new Date().getTime();
   const generatedTime = new Date(liveSession.codeGeneratedAt).getTime();
   
-  if (now - generatedTime > sixHoursInMs) {
+  if (now - generatedTime > attendanceWindowMs) {
     return { success: false, error: 'This QR code has expired.' };
   }
 
@@ -246,6 +252,12 @@ export async function markAttendanceByQR(sessionId: string, code: string) {
 export async function getUserAttendance(courseId: string) {
   const user = await me();
   if (!user) return { watchedLessons: [], attendedLiveSessions: [] };
+
+  const enrollment = await prisma.userCourse.findUnique({
+    where: { userId_courseId: { userId: user.id, courseId } },
+    select: { userId: true },
+  });
+  if (!enrollment && user.role !== 'ADMIN') return { watchedLessons: [], attendedLiveSessions: [] };
 
   const records = await prisma.attendanceRecord.findMany({
     where: {

@@ -4,7 +4,7 @@ import { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { Button } from '@/components/ui/button';
-import { BookOpen, Home, FileText, Award, User, LogOut, LayoutDashboard, BarChart3, Users } from 'lucide-react';
+import { BookOpen, Home, FileText, Award, User, LogOut, LayoutDashboard, BarChart3, Users, Code2 } from 'lucide-react';
 import Link from 'next/link';
 
 export function DashboardLayout({ children }: { children: ReactNode }) {
@@ -19,6 +19,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
   const navItems = [
     { href: '/dashboard', label: 'Dashboard', icon: Home },
     { href: '/courses', label: 'Courses', icon: BookOpen },
+    { href: '/tech-cell', label: 'Tech Cell Learning', icon: Code2 },
     { href: '/assignments', label: 'Assignments', icon: FileText },
     { href: '/certificates', label: 'Certificates', icon: Award },
     { href: '/profile', label: 'Profile', icon: User },
@@ -26,6 +27,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
 
   const adminNavItems = [
     { href: '/dashboard', label: 'Dashboard', icon: Home },
+    { href: '/tech-cell', label: 'Tech Cell Learning', icon: Code2 },
     { href: '/admin', label: 'Admin', icon: LayoutDashboard },
     { href: '/admin/attendance', label: 'Attendance Report', icon: BarChart3 },
     { href: '/admin/assignments', label: 'Assignment Review', icon: FileText },
@@ -83,9 +85,9 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
 
       {/* Mobile Navigation */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 border-t bg-background">
-        <div className="flex gap-2 p-2">
+        <div className="flex gap-2 p-2 overflow-x-auto">
           {items.map((item) => (
-            <Link key={item.href} href={item.href} className="flex-1">
+            <Link key={item.href} href={item.href} className="flex-1 min-w-16 sm:min-w-20">
               <div className="flex flex-col items-center gap-1 px-3 py-3 rounded-lg hover:bg-muted/50 transition-colors">
                 <item.icon className="w-5 h-5 text-primary" />
                 <span className="text-[10px] font-medium hidden sm:inline-block">{item.label}</span>

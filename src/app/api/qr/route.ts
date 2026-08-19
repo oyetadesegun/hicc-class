@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import QRCode from "qrcode";
+import { requireAdmin } from "@/lib/auth/session";
 
 export async function GET(request: NextRequest) {
+  try {
+    await requireAdmin();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unauthorized";
+    return new NextResponse(message, { status: message === "Not authenticated" ? 401 : 403 });
+  }
+
   const searchParams = request.nextUrl.searchParams;
   const sessionId = searchParams.get('s');
   const code = searchParams.get('c');
@@ -29,7 +37,7 @@ export async function GET(request: NextRequest) {
       headers: {
         "Content-Type": "image/png",
         // Cache the QR code to avoid regenerating for the same URL over and over
-        "Cache-Control": "public, max-age=86400",
+        "Cache-Control": "private, no-store",
       },
     });
   } catch (err) {

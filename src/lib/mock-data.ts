@@ -2,7 +2,6 @@ export interface Student {
   id: string;
   name: string;
   email: string;
-  password: string;
   enrolledCourses: string[];
   certificates: string[];
   attendance: Record<string, number>; // courseId -> percentage
@@ -21,11 +20,22 @@ export interface Course {
   thumbnail?: string;
   level?: string;
   lessons: Lesson[];
+  sections?: CourseSection[];
   liveSession?: LiveSession;
   liveSessions?: LiveSession[];
   assignments: Assignment[];
   quiz: Quiz;
   exam: Exam;
+}
+
+export interface CourseSection {
+  id: string;
+  title: string;
+  description?: string | null;
+  type: 'CORE' | 'RECORDED';
+  order: number;
+  countsTowardProgress: boolean;
+  _count?: { lessons: number };
 }
 
 export interface Lesson {
@@ -34,8 +44,10 @@ export interface Lesson {
   videoUrl?: string;
   attachmentUrl?: string;
   attachmentType?: string;
-  duration: number; // in minutes
+  duration: number | string; // in minutes
   order: number;
+  sectionId?: string;
+  sectionType?: 'CORE' | 'RECORDED';
 }
 
 export interface LiveSession {
@@ -462,7 +474,6 @@ export const mockStudents: Student[] = [
     id: 'student-1',
     name: 'Harvester Student',
     email: 'student@harvesters.org',
-    password: 'password123', // In production, this would be hashed
     enrolledCourses: ['course-1', 'course-2'],
     certificates: [],
     attendance: { 'course-1': 60, 'course-2': 75 },

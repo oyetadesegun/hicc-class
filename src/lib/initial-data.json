@@ -60,21 +60,18 @@
       "id": "student-1",
       "name": "Harvester Student",
       "email": "student@harvesters.org",
-      "password": "password123",
       "role": "STUDENT"
     },
     {
       "id": "admin-1",
       "name": "Admin User",
       "email": "admin@harvesters.org",
-      "password": "password123",
       "role": "ADMIN"
     },
     {
       "id": "john-well",
       "name": "John Well",
       "email": "johnwellacademy@gmail.com",
-      "password": "1t1sW***ll",
       "role": "STUDENT"
     }
   ]

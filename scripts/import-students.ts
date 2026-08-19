@@ -1,29 +1,43 @@
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import * as path from 'path';
 import 'dotenv/config';
+import { hashPassword } from '../src/lib/auth/password';
 
 const pool = new Pool({ 
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  connectionString: process.env.DATABASE_URL
 });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
-  const filePath = path.resolve(__dirname, '..', 'public', 'Basic Leadership Course (Responses).xlsx');
+  const filePath = path.resolve(__dirname, '..', 'private-imports', 'Basic Leadership Course (Responses).xlsx');
   console.log('Reading file:', filePath);
 
-  const workbook = XLSX.readFile(filePath);
-  const sheetName = workbook.SheetNames[0];
-  const worksheet = workbook.Sheets[sheetName];
-  const data: any[] = XLSX.utils.sheet_to_json(worksheet);
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.readFile(filePath);
+  const worksheet = workbook.worksheets[0];
+  if (!worksheet) throw new Error('Spreadsheet contains no worksheets');
+
+  const headers = worksheet.getRow(1).values as Array<unknown>;
+  const data: Record<string, string>[] = [];
+  worksheet.eachRow((row, rowNumber) => {
+    if (rowNumber === 1) return;
+    const record: Record<string, string> = {};
+    row.eachCell((cell, columnNumber) => {
+      const header = String(headers[columnNumber] ?? '').trim();
+      if (header) record[header] = cell.text.trim();
+    });
+    if (Object.keys(record).length) data.push(record);
+  });
 
   console.log(`Found ${data.length} students in Excel.`);
 
-  const DEFAULT_PASSWORD = '123456';
+  const defaultPassword = process.env.IMPORT_DEFAULT_PASSWORD;
+  if (!defaultPassword) throw new Error('IMPORT_DEFAULT_PASSWORD is required');
+  const passwordHash = await hashPassword(defaultPassword);
   const COURSE_ID = 'course-leadership'; // From prisma/seed.ts
 
   for (const row of data) {
@@ -48,7 +62,7 @@ async function main() {
           email,
           name,
           phoneNumber,
-          password: DEFAULT_PASSWORD,
+          password: passwordHash,
           role: 'STUDENT',
         },
       });

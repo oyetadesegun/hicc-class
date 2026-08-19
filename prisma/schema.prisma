@@ -20,7 +20,22 @@ model User {
   certificates  Certificate[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  failedLoginAttempts Int @default(0)
+  lockedUntil   DateTime?
   attendanceRecords AttendanceRecord[]
+  sessions      Session[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model Course {
@@ -34,6 +49,7 @@ model Course {
   duration    String
   price       Float    @default(0)
   lessons     Lesson[]
+  sections    CourseSection[]
   liveSessions LiveSession[]
   assignments Assignment[]
   quizzes     Quiz[]
@@ -43,6 +59,29 @@ model Course {
   attendanceRecords AttendanceRecord[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+enum CourseSectionType {
+  CORE
+  RECORDED
+}
+
+model CourseSection {
+  id                   String            @id @default(cuid())
+  title                String
+  description          String?
+  type                 CourseSectionType
+  order                Int
+  countsTowardProgress Boolean           @default(true)
+  courseId             String
+  course               Course            @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons              Lesson[]
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  @@unique([courseId, type])
+  @@unique([courseId, order])
+  @@index([courseId, countsTowardProgress, order])
 }
 
 model UserCourse {
@@ -69,9 +108,13 @@ model Lesson {
   order     Int
   courseId  String
   course    Course   @relation(fields: [courseId], references: [id])
+  sectionId String
+  section   CourseSection @relation(fields: [sectionId], references: [id], onDelete: Restrict)
   liveSessions LiveSession[]
   attendanceRecords AttendanceRecord[]
   assignments Assignment[]
+
+  @@index([sectionId, order])
 }
 
 model LiveSession {
